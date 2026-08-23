@@ -14,23 +14,34 @@ Follow these 3 simple steps to get it running. No programming knowledge required
 ---
 
 ### 🟢 STEP 1: Download & Install Ollama
+
+You can install Ollama either through your web browser OR with a single PowerShell command:
+
+#### Option A: Using PowerShell (Fastest - Copy & Paste)
+1. Right-click your Windows **Start menu** icon and click **Windows PowerShell** (or **Terminal**).
+2. Paste this command and press **Enter**:
+   ```powershell
+   winget install Ollama.Ollama
+   ```
+   *(Or if you don't have winget, copy-paste this direct download & install line:)*
+   ```powershell
+   Invoke-WebRequest -Uri "https://ollama.com/download/OllamaSetup.exe" -OutFile "$env:TEMP\OllamaSetup.exe"; Start-Process "$env:TEMP\OllamaSetup.exe" -Wait
+   ```
+
+#### Option B: Using Web Browser
 1. Go to **[https://ollama.com](https://ollama.com)** in your web browser.
 2. Click the big **"Download for Windows"** button.
 3. Open the downloaded file (`OllamaSetup.exe`) and click **Install**.
-4. Once installed, an Ollama llama icon will appear in your Windows bottom-right system tray (next to the clock).
+
+> Once installed, the Ollama llama icon will appear in your Windows system tray (bottom-right next to the clock).
 
 ---
 
 ### 🟢 STEP 2: Download the Free AI Translation Model
 Now, tell Ollama to download the translation model (the AI brain):
 
-1. On your keyboard, press the **Windows Key + R** at the same time.
-2. A small "Run" window will pop up. Type:
-   ```text
-   cmd
-   ```
-   and press **Enter**.
-3. A black command window will open. Copy and paste **ONE** of the following lines, then press **Enter**:
+1. Open **PowerShell** or Command Prompt (`cmd`).
+2. Copy and paste **ONE** of the following lines, then press **Enter**:
 
    * **For most computers & gaming PCs (Recommended):**
      ```bash
