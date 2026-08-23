@@ -557,6 +557,8 @@ def unmark_in_flight(req_path):
     with _in_flight_lock:
         _in_flight.discard(req_path)
 
+_job_queue = queue.Queue()
+
 def _worker(db_path, backends, ipc_targets):
     while True:
         try:
