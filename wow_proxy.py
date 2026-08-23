@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5  â€”  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5  Ã¢â‚¬â€  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -21,7 +21,7 @@ Translation Backends (ordered priority with automatic fallback):
   - Ollama (local offline LLM, e.g. qwen2.5)
   - DeepL (Free or Pro API key)
   - OpenAI (gpt-4o-mini / compatible endpoints)
-  - Google Translate (built-in free web client fallback â€” zero setup required!)
+  - Google Translate (built-in free web client fallback Ã¢â‚¬â€ zero setup required!)
 
 Persistent SQLite Cache (translations.db):
   Instant translation responses for previously translated text.
@@ -86,7 +86,7 @@ def load_config(path):
         print(f"[config] No config file found at '{path}', using defaults.")
         return dict(DEFAULT_CONFIG)
     if tomllib is None:
-        print("[config] tomllib/tomli not installed â€” using defaults.")
+        print("[config] tomllib/tomli not installed Ã¢â‚¬â€ using defaults.")
         return dict(DEFAULT_CONFIG)
     try:
         with open(path, "rb") as f:
@@ -493,7 +493,7 @@ def translate(text, from_lang, to_lang, backends):
             if result:
                 # Clean up apostrophe space artifact e.g. "doesn' t" -> "doesn't"
                 result = re.sub(r"'%s+(\w)", r"'\1", result)
-                print(f"[translate] [{btype}] {from_lang}â†’{to_lang}: '{text[:40]}' â†’ '{result[:40]}'")
+                print(f"[translate] [{btype}] {from_lang}Ã¢â€ â€™{to_lang}: '{text[:40]}' Ã¢â€ â€™ '{result[:40]}'")
                 return result, None
         except Exception as e:
             last_err = f"{btype}: {e}"
@@ -507,7 +507,7 @@ def translate(text, from_lang, to_lang, backends):
             print("[translate] Attempting automatic Google fallback...")
             res = _call_google(text, from_lang, to_lang, {"timeout": 8})
             if res:
-                print(f"[translate] [google-fallback] {from_lang}â†’{to_lang}: '{text[:40]}' â†’ '{res[:40]}'")
+                print(f"[translate] [google-fallback] {from_lang}Ã¢â€ â€™{to_lang}: '{text[:40]}' Ã¢â€ â€™ '{res[:40]}'")
                 return res, None
         except Exception as e:
             last_err = f"google-fallback: {e}"
@@ -543,7 +543,19 @@ def clean_http_results(max_age=120):
 # ---------------------------------------------------------------------------
 # Worker Pool
 # ---------------------------------------------------------------------------
-_job_queue = queue.Queue()
+_in_flight = set()
+_in_flight_lock = threading.Lock()
+
+def mark_in_flight(req_path):
+    with _in_flight_lock:
+        if req_path in _in_flight:
+            return False
+        _in_flight.add(req_path)
+        return True
+
+def unmark_in_flight(req_path):
+    with _in_flight_lock:
+        _in_flight.discard(req_path)
 
 def _worker(db_path, backends, ipc_targets):
     while True:
@@ -553,35 +565,33 @@ def _worker(db_path, backends, ipc_targets):
             continue
         
         req_id, req_file_path, from_lang, to_lang, text, is_http = item
-        
-        # Check SQLite Cache first
-        cached = cache_get(db_path, text, from_lang, to_lang)
-        if cached:
-            if is_http:
-                store_http_result(req_id, cached, "")
-            if req_file_path:
-                _write_ipc_result(req_id, "ok", cached, ipc_targets)
-                _safe_delete(req_file_path)
-            _job_queue.task_done()
-            continue
-            
-        result, error = translate(text, from_lang, to_lang, backends)
-        if result:
-            cache_set(db_path, text, from_lang, to_lang, result)
-            if is_http:
-                store_http_result(req_id, result, "")
-            if req_file_path:
-                _write_ipc_result(req_id, "ok", result, ipc_targets)
-        else:
-            if is_http:
-                store_http_result(req_id, "", error or "Translation failed")
-            if req_file_path:
-                _write_ipc_result(req_id, "err", error or "Translation failed", ipc_targets)
+        try:
+            # Check SQLite Cache first
+            cached = cache_get(db_path, text, from_lang, to_lang)
+            if cached:
+                if is_http:
+                    store_http_result(req_id, cached, "")
+                if req_file_path:
+                    _write_ipc_result(req_id, "ok", cached, ipc_targets)
+                continue
                 
-        if req_file_path:
-            _safe_delete(req_file_path)
-            
-        _job_queue.task_done()
+            result, error = translate(text, from_lang, to_lang, backends)
+            if result:
+                cache_set(db_path, text, from_lang, to_lang, result)
+                if is_http:
+                    store_http_result(req_id, result, "")
+                if req_file_path:
+                    _write_ipc_result(req_id, "ok", result, ipc_targets)
+            else:
+                if is_http:
+                    store_http_result(req_id, "", error or "Translation failed")
+                if req_file_path:
+                    _write_ipc_result(req_id, "err", error or "Translation failed", ipc_targets)
+        finally:
+            if req_file_path:
+                _safe_delete(req_file_path)
+                unmark_in_flight(req_file_path)
+            _job_queue.task_done()
 
 def _write_ipc_result(req_id, status, body, ipc_targets):
     for ipc_root in ipc_targets:
@@ -727,7 +737,6 @@ def parse_request_file(content):
 def ipc_scanner(ipc_targets, db_path, backends, cfg):
     stale_ttl = cfg.get("stale_ttl", 60)
     scan_iv = cfg.get("scan_interval", 0.05)
-    in_flight = set()
 
     # Write proxy_ready signal in all IPC locations
     for target in ipc_targets:
@@ -790,9 +799,6 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
 
                 req_path = os.path.join(req_dir, fname)
 
-                if req_id in in_flight:
-                    continue
-
                 try:
                     age = now - os.path.getmtime(req_path)
                 except Exception:
@@ -800,19 +806,24 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
 
                 if age > stale_ttl:
                     _safe_delete(req_path)
-                    in_flight.discard(req_id)
+                    unmark_in_flight(req_path)
+                    continue
+
+                if not mark_in_flight(req_path):
                     continue
 
                 try:
                     with open(req_path, "r", encoding="utf-8") as f:
                         content = f.read().strip()
                     if not content:
+                        unmark_in_flight(req_path)
                         continue
                     from_lang, to_lang, text = parse_request_file(content)
                 except Exception as e:
                     if age > 1.0:
                         print(f"[proxy] Error parsing {fname}: {e}")
                         _safe_delete(req_path)
+                    unmark_in_flight(req_path)
                     continue
 
                 # Cache check
@@ -820,17 +831,11 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                 if cached:
                     _write_ipc_result(req_id, "ok", cached, ipc_targets)
                     _safe_delete(req_path)
+                    unmark_in_flight(req_path)
                     print(f"[proxy] [cache-hit] {from_lang}â†’{to_lang}: '{text[:40]}'")
                     continue
 
-                in_flight.add(req_id)
                 _job_queue.put((req_id, req_path, from_lang, to_lang, text, False))
-
-            # 3. Clean finished requests from in_flight set
-            for rid in list(in_flight):
-                check_fname = f"req_{rid}.txt" if is_imports else f"{rid}.req"
-                if not os.path.exists(os.path.join(req_dir, check_fname)):
-                    in_flight.discard(rid)
 
         # Periodic cleanup of old result files and HTTP map
         if now - last_cleanup > 30:
