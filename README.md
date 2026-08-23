@@ -1,4 +1,4 @@
-# ðŸŒ WoWTranslate v3.5 â€” Universal Real-Time Chat Translator
+# 🌐 WoWTranslate v3.5 — Universal Real-Time Chat Translator
 ### World of Warcraft 1.12.1 (Vanilla / Turtle WoW)
 
 **WoWTranslate** provides instant, two-way real-time translation between **Chinese, English, Russian, Japanese, and Korean** directly inside the World of Warcraft 1.12.1 game client.
@@ -7,7 +7,7 @@ Powered by **SuperWoW File IPC**, a local multi-threaded proxy, and an offline *
 
 ---
 
-## âš¡ Quick Start Guide (3 Simple Steps)
+## ⚡ Quick Start Guide (3 Simple Steps)
 
 ### Step 1: Install the Addon
 1. Copy the `WoWTranslate` directory into your WoW AddOns folder:
@@ -21,7 +21,7 @@ Powered by **SuperWoW File IPC**, a local multi-threaded proxy, and an offline *
 2. Double-click **`start_proxy.bat`** (or run `python wow_proxy.py`).
 3. Keep the small terminal window minimized while playing.
 
-> **ðŸ’¡ Zero Setup Required!**
+> **💡 Zero Setup Required!**
 > The proxy has a built-in free Google Translate fallback with offline SQLite caching. It works immediately out of the box with zero API keys or external tools required!
 
 ### Step 3: Verify In-Game
@@ -40,14 +40,14 @@ You will see:
 
 ---
 
-## ðŸ’¬ How It Works in Game
+## 💬 How It Works in Game
 
-### ðŸ“¥ 1. Incoming Chat (Foreign â†’ English)
+### 📥 1. Incoming Chat (Foreign → English)
 - Chinese, Russian, Japanese, or Korean messages sent in **Guild, Party, Raid, Whisper, Say, Yell, or World Channels** are automatically translated to English.
 - The translated line appears right below the original message, with **matching channel color** (e.g. `[WT-Guild]` in Guild green, `[WT-Party]` in Party blue).
 - **Replace Mode**: If you want to hide the original foreign text completely and only display English, type `/wt show` and enable **"Replace Original Message"**.
 
-### ðŸ“¤ 2. Outgoing Chat (English â†’ Chinese)
+### 📤 2. Outgoing Chat (English → Chinese)
 - Enable outgoing translation:
   ```
   /wt out on
@@ -57,7 +57,7 @@ You will see:
 
 ---
 
-## ðŸŽ® In-Game Slash Commands (`/wt` or `/wowtranslate`)
+## 🎮 In-Game Slash Commands (`/wt` or `/wowtranslate`)
 
 | Command | Action |
 | :--- | :--- |
@@ -67,7 +67,7 @@ You will see:
 | **`/wt status`** | Show addon status, active backends, cache hit rate, and settings |
 | **`/wt out on`** / **`/wt out off`** | Turn automatic outgoing translation ON or OFF |
 | **`/wt testout <text>`** | Preview/test outgoing translation locally without sending to chat |
-| **`/wt test <text>`** | Test incoming translation locally (e.g. `/wt test ä½ å¥½`) |
+| **`/wt test <text>`** | Test incoming translation locally (e.g. `/wt test 你好`) |
 | **`/wt on`** / **`/wt off`** | Enable or disable incoming chat translation |
 | **`/wt reset`** | Re-hook chat frames and clear any stale request queues |
 | **`/wt clearcache`** | Clear local translation cache |
@@ -75,7 +75,7 @@ You will see:
 
 ---
 
-## ðŸ¤– AI Backend Configuration (`config.toml`)
+## 🤖 AI Backend Configuration (`config.toml`)
 
 You can easily customize which translation engine is used by opening `config.toml` in Notepad:
 
@@ -110,7 +110,7 @@ timeout = 5
 # api_key = "YOUR_DEEPL_AUTH_KEY:fx"
 # timeout = 15
 
-# 5. Built-in Google Web Translate (Free Fallback â€” Zero Setup)
+# 5. Built-in Google Web Translate (Free Fallback — Zero Setup)
 [[backends]]
 type = "google"
 timeout = 8
@@ -118,7 +118,7 @@ timeout = 8
 
 ---
 
-## ðŸ”§ Troubleshooting & FAQ
+## 🔧 Troubleshooting & FAQ
 
 #### 1. Why do Chinese characters show as `??` on my screen?
 - The standard English WoW client font (`FRIZQT__.TTF`) does not include Chinese font glyphs by default.
