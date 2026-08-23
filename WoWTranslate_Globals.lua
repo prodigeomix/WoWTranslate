@@ -44,12 +44,12 @@ WT_wtNameplateScanStart = nil
 
 -- Pre-translated prefixes for outgoing messages (zero API cost)
 WT_TRANSLATED_PREFIXES = {
-    zh = "[由WoWTranslate翻译]",
+    zh = "[ç”±WoWTranslateç¿»è¯‘]",
     en = "[Translated by WoWTranslate]",
-    ko = "[WoWTranslate 번역]",
-    ja = "[WoWTranslate翻訳]",
-    ru = "[Переведено WoWTranslate]",
-    de = "[Übersetzt von WoWTranslate]",
+    ko = "[WoWTranslate ë²ˆì—­]",
+    ja = "[WoWTranslateç¿»è¨³]",
+    ru = "[ÐŸÐµÑ€ÐµÐ²ÐµÐ´ÐµÐ½Ð¾ WoWTranslate]",
+    de = "[Ãœbersetzt von WoWTranslate]",
     fr = "[Traduit par WoWTranslate]",
     es = "[Traducido por WoWTranslate]",
     pt = "[Traduzido por WoWTranslate]",
@@ -128,6 +128,7 @@ WT_defaults = {
     },
     outgoingPrefix = "[Translated by WoWTranslate]",
     outgoingPrefixEnabled = true,
+    outgoingDualLanguage = true, -- Sends both translated and original text: e.g. "å—¨ (HELLO)"
     disableWhileAfk = false,
     translateSystemMessages = false,  -- Don't translate system msgs, emotes, NPC speech
     -- Language settings (any-to-any translation)
