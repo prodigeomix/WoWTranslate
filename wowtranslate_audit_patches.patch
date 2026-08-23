@@ -1,0 +1,951 @@
+--- /tmp/orig_lf/WoWTranslate.lua	2026-06-18 03:18:35.345227992 +0000
++++ WoWTranslate.lua	2026-06-18 03:12:56.926990156 +0000
+@@ -366,6 +366,14 @@
+ -- ============================================================================
+ -- ADDON INITIALIZATION
+ -- ============================================================================
++-- C4 fix: forward-declare WT_OnPlayerLogin so the eventFrame's PLAYER_LOGIN
++-- handler below is safe even if WoWTranslate_Tooltip.lua (which defines the
++-- real body) loads AFTER WoWTranslate.lua in the .toc.  The real definition
++-- will overwrite this stub when Tooltip.lua loads; if Tooltip.lua is missing
++-- or load-ordered after, this stub prevents an "attempt to call nil" error.
++WT_OnPlayerLogin = WT_OnPlayerLogin or function()
++    WT_DebugLog("WT_OnPlayerLogin stub called — real definition not loaded yet")
++end
+ 
+ function WT_InitializeSettings()
+     if not WoWTranslateDB then WoWTranslateDB = {} end
+@@ -484,7 +492,10 @@
+ eventFrame:RegisterEvent("PLAYER_LOGIN")
+ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+ eventFrame:RegisterEvent("PLAYER_FLAGS_CHANGED")
+-eventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
++-- C5 fix: CHAT_MSG_SYSTEM is no longer registered.  The old handler matched
++-- English-only substrings ("You are now AFK" / "You are no longer AFK") which
++-- never fired on German/French/etc clients.  AFK state is now tracked solely
++-- via PLAYER_FLAGS_CHANGED + UnitIsAFK("player"), which is locale-independent.
+ 
+ eventFrame:SetScript("OnEvent", function()
+     if event == "ADDON_LOADED" and arg1 == "WoWTranslate" then
+@@ -500,12 +511,6 @@
+         if UnitIsAFK then
+             WT_playerIsAFK = (UnitIsAFK("player") == 1) or (UnitIsAFK("player") == true)
+         end
+-    elseif event == "CHAT_MSG_SYSTEM" then
+-        if arg1 and string.find(arg1, "You are now AFK") then
+-            WT_playerIsAFK = true
+-        elseif arg1 and string.find(arg1, "You are no longer AFK") then
+-            WT_playerIsAFK = false
+-        end
+     end
+ end)
+ 
+@@ -522,14 +527,28 @@
+ 
+ -- Watchdog: WoW 1.12 replaces SetScript("OnEvent") handlers on chat frames when
+ -- certain events fire (channel join, zone change, UPDATE_CHAT_WINDOWS, etc.).
+--- Re-install our wrappers every 60s so hooks stay active after such events.
++-- Re-install our wrappers when this happens so hooks stay active.
+ -- pcall prevents a WT_HookChatFrames error from silently killing this OnUpdate.
++-- M4 fix: only re-hook when at least one frame has lost its hook.  The old
++-- code unconditionally called WT_HookChatFrames(true) every 60s, which cleared
++-- WoWTranslateHooked=false on every frame and re-wrapped even when nothing
++-- had been replaced — wasting CPU and creating closure garbage.
+ local hookWatchdogElapsed = 0
+ local hookWatchdogFrame = CreateFrame("Frame")
+ hookWatchdogFrame:SetScript("OnUpdate", function()
+     hookWatchdogElapsed = hookWatchdogElapsed + arg1
+-    if hookWatchdogElapsed >= 60 then
+-        hookWatchdogElapsed = 0
++    if hookWatchdogElapsed < 60 then return end
++    hookWatchdogElapsed = 0
++    -- Check if any chat frame has lost its hook since the last watchdog tick.
++    local needsRehook = false
++    for i = 1, NUM_CHAT_WINDOWS do
++        local f = getglobal("ChatFrame" .. i)
++        if f and not f.WoWTranslateHooked then
++            needsRehook = true
++            break
++        end
++    end
++    if needsRehook then
+         pcall(WT_HookChatFrames, true)
+     end
+ end)
+--- /tmp/orig_lf/WoWTranslate_API.lua	2026-06-18 03:18:35.258227673 +0000
++++ WoWTranslate_API.lua	2026-06-18 03:08:23.093989893 +0000
+@@ -1,7 +1,9 @@
+ -- WoWTranslate_API.lua
+ -- DLL communication via UnitXP interface
+ -- Handles async translation requests and polling
+--- v0.13: Removed credit tracking; Translate() now accepts fromLang parameter
++-- v0.14: Translate() now returns (bool, reason) so callers can distinguish
++--        "deduped" (another frame is translating) from "queue_full"/
++--        "rate_limited" (caller should flush the original message).
+ 
+ WoWTranslate_API = {}
+ 
+@@ -32,44 +34,27 @@
+ local MAX_PENDING = 4        -- Max concurrent DLL requests; prevents queue overflow
+ 
+ -- ============================================================================
+--- LUA 5.0 COMPATIBILITY
+--- ============================================================================
+--- strsplit is not available in WoW 1.12, implement it
+-local function strsplit(delimiter, text, limit)
+-    if not text then return nil end
+-    if not delimiter or delimiter == "" then return text end
+-
+-    local result = {}
+-    local count = 0
+-    local start = 1
+-    local delimStart, delimEnd = string.find(text, delimiter, start, true)
+-
+-    while delimStart do
+-        count = count + 1
+-        if limit and count >= limit then
+-            break
+-        end
+-        table.insert(result, string.sub(text, start, delimStart - 1))
+-        start = delimEnd + 1
+-        delimStart, delimEnd = string.find(text, delimiter, start, true)
+-    end
+-
+-    table.insert(result, string.sub(text, start))
+-    return unpack(result)
+-end
+-
+--- ============================================================================
+ -- DLL STATUS FUNCTIONS
+ -- ============================================================================
++-- NOTE: WT_strsplit (the global version) is defined in WoWTranslate_Globals.lua.
++-- The local copy that used to live here was dead code and has been removed.
+ 
+--- Check if DLL is loaded and responding
++-- Check if DLL is loaded and responding.
++-- When the DLL recovers after being down, clear the one-shot warning flags so
++-- the user is notified again on the next failure (see L7 in audit).
+ function WoWTranslate_API.CheckDLL()
+     if UnitXP then
+         local success, result = pcall(function()
+             return UnitXP("WoWTranslate", "ping")
+         end)
+         if success and result == "pong" then
++            local wasDown = not dllAvailable
+             dllAvailable = true
++            if wasDown then
++                -- Reset one-shot warning flags so future drops are surfaced.
++                WT_dllWarnShown = false
++                WT_translationErrWarnShown = false
++            end
+             return true
+         end
+     end
+@@ -127,20 +112,24 @@
+     -- Silently skip when the DLL queue is already full.
+     -- Excess requests would be dropped by the DLL internally, leaving Lua-side
+     -- pendingRequests entries that only time out after 30s, degrading the DLL state.
++    -- Returns a reason so callers can flush the original message rather than
++    -- silently dropping it (see C6 in audit).
+     if activePendingCount >= MAX_PENDING then
+-        return false
++        return false, "queue_full"
+     end
+ 
+     -- Silently skip during API error backoff window.
+     if GetTime() < rateLimitedUntil then
+-        return false
++        return false, "rate_limited"
+     end
+ 
+     -- Deduplicate: the same chat message fires in every chat frame at once, producing
+     -- 4-5 identical requests before any result is cached.  Only the first needs to go
+     -- to the DLL; the rest will get a cache hit when the first callback completes.
++    -- Callers should NOT flush the original on this reason — another frame owns the
++    -- in-flight request and will broadcast the result to all registered targets.
+     if pendingTexts[text] then
+-        return false
++        return false, "deduped"
+     end
+ 
+     -- Generate unique request ID
+@@ -164,7 +153,7 @@
+ 
+     if not success then
+         pendingRequests[requestId] = nil
+-		pendingTexts[text] = nil 
++                pendingTexts[text] = nil 
+         if callback then
+             callback(nil, "DLL call failed: " .. tostring(err))
+         end
+@@ -331,11 +320,11 @@
+ 
+     if activePendingCount >= MAX_PENDING then
+         if callback then callback(nil, "Queue full, try again shortly") end
+-        return false
++        return false, "queue_full"
+     end
+ 
+     if GetTime() < rateLimitedUntil then
+-        return false
++        return false, "rate_limited"
+     end
+ 
+     -- Generate unique request ID with "out_" prefix to distinguish from incoming
+@@ -358,7 +347,7 @@
+ 
+     if not success then
+         pendingRequests[requestId] = nil
+-		pendingTexts[text] = nil 
++                pendingTexts[text] = nil 
+         if callback then
+             callback(nil, "DLL call failed: " .. tostring(err))
+         end
+--- /tmp/orig_lf/WoWTranslate_Cache.lua	2026-06-18 03:18:35.268227710 +0000
++++ WoWTranslate_Cache.lua	2026-06-18 03:08:23.094989897 +0000
+@@ -1,34 +1,60 @@
+ -- WoWTranslate_Cache.lua
+ -- Permanent translation cache using SavedVariables
+--- Translations persist across sessions and never expire
++-- Translations persist across sessions.
++--
++-- v0.14: Added size-based LRU eviction (H1 in audit). When the cache exceeds
++--        MAX_ENTRIES, the oldest 25% of entries are dropped on the next Save.
++--        A monotonically-increasing timestamp counter is used because Lua
++--        tables don't preserve insertion order. The counter is persisted in
++--        SavedVariables so eviction stays stable across sessions.
++
++-- Maximum entries before LRU eviction kicks in.
++local MAX_ENTRIES = 5000
++
++-- When the cap is hit, drop this fraction (oldest first).
++local EVICT_FRACTION = 0.25
+ 
+ -- Initialize cache (will be populated from SavedVariables on load)
+ WoWTranslateCache = WoWTranslateCache or {}
++-- Per-entry timestamp (1-indexed counter; lower = older).
++WoWTranslateCacheOrder = WoWTranslateCacheOrder or {}
++WoWTranslateCacheCounter = WoWTranslateCacheCounter or 0
+ 
+ -- Cache statistics
+ local cacheHits = 0
+ local cacheMisses = 0
+ 
+--- Check if a translation exists in cache
++-- Check if a translation exists in cache.
++-- Also bumps the entry's timestamp so frequently-used entries survive eviction.
+ function WoWTranslate_CacheGet(text)
+     if WoWTranslateCache[text] then
+         cacheHits = cacheHits + 1
++        -- Refresh LRU position so hot entries survive eviction.
++        WoWTranslateCacheCounter = WoWTranslateCacheCounter + 1
++        WoWTranslateCacheOrder[text] = WoWTranslateCacheCounter
+         return WoWTranslateCache[text], true
+     end
+     cacheMisses = cacheMisses + 1
+     return nil, false
+ end
+ 
+--- Save a translation to cache
++-- Save a translation to cache.  Triggers LRU eviction if over the cap.
+ function WoWTranslate_CacheSave(text, translation)
+     if text and translation and text ~= "" and translation ~= "" then
++        local isNew = (WoWTranslateCache[text] == nil)
+         WoWTranslateCache[text] = translation
++        WoWTranslateCacheCounter = WoWTranslateCacheCounter + 1
++        WoWTranslateCacheOrder[text] = WoWTranslateCacheCounter
++        if isNew then
++            WoWTranslate_CacheMaybeEvict()
++        end
+         return true
+     end
+     return false
+ end
+ 
+--- Get cache statistics
++-- Count entries without scanning the order table (which may have stale keys
++-- after eviction).  Used by /wt status.
+ function WoWTranslate_CacheStats()
+     local count = 0
+     for _ in pairs(WoWTranslateCache) do
+@@ -43,9 +69,40 @@
+     }
+ end
+ 
++-- Evict oldest EVICT_FRACTION of entries when over MAX_ENTRIES.
++-- Builds a sortable array of (key, timestamp) pairs for the active entries only.
++-- Stale order entries (for keys already gone) are cleaned up as a side effect.
++function WoWTranslate_CacheMaybeEvict()
++    local count = 0
++    for _ in pairs(WoWTranslateCache) do
++        count = count + 1
++    end
++    if count <= MAX_ENTRIES then return end
++
++    -- Build list of active entries with their timestamps.
++    local entries = {}
++    for key, _ in pairs(WoWTranslateCache) do
++        local ts = WoWTranslateCacheOrder[key] or 0
++        table.insert(entries, { key = key, ts = ts })
++    end
++
++    -- Sort oldest first.
++    table.sort(entries, function(a, b) return a.ts < b.ts end)
++
++    -- Drop the oldest EVICT_FRACTION of them.
++    local toEvict = math.floor(table.getn(entries) * EVICT_FRACTION)
++    for i = 1, toEvict do
++        local key = entries[i].key
++        WoWTranslateCache[key] = nil
++        WoWTranslateCacheOrder[key] = nil
++    end
++end
++
+ -- Clear the cache (use with caution)
+ function WoWTranslate_CacheClear()
+     WoWTranslateCache = {}
++    WoWTranslateCacheOrder = {}
++    WoWTranslateCacheCounter = 0
+     cacheHits = 0
+     cacheMisses = 0
+ end
+--- /tmp/orig_lf/WoWTranslate_Hooks.lua	2026-06-18 03:18:35.296227812 +0000
++++ WoWTranslate_Hooks.lua	2026-06-18 03:17:58.227092208 +0000
+@@ -4,6 +4,13 @@
+ -- CHAT FRAME HOOKING
+ -- ============================================================================
+ 
++-- C3 fix: forward-declare WT_nextSendChatMessage as an upvalue so all
++-- functions in this file (defined before OR after the install/uninstall
++-- functions) share the same storage.  Without this, the `local` declared
++-- later in the file would not be visible to WT_SafeSendChatMessage, which
++-- is defined earlier — they'd silently use different storage locations.
++local WT_nextSendChatMessage
++
+ 
+ -- Maps event to ChatTypeInfo key so we can read the native channel color.
+ -- CHAT_MSG_CHANNEL requires special handling (channel slot number determines the key).
+@@ -156,7 +163,12 @@
+ function WT_HookLFT()
+     if lftHooked then return end
+     if not LFT_UpdateGroupsList then return end
+-    local originalUpdate = LFT_UpdateGroupsList
++    -- M5 fix: save the original on a stable field so we can unhook later
++    -- (and so re-hooking after LFT is updated doesn't double-wrap).
++    if not LFT_UpdateGroupsList_WTOriginal then
++        LFT_UpdateGroupsList_WTOriginal = LFT_UpdateGroupsList
++    end
++    local originalUpdate = LFT_UpdateGroupsList_WTOriginal
+     LFT_UpdateGroupsList = function()
+         originalUpdate()
+         WT_LFT_ScanVisibleEntries()
+@@ -164,6 +176,18 @@
+     lftHooked = true
+ end
+ 
++-- M5 fix: restore the original LFT_UpdateGroupsList when the user disables
++-- translateGroupFinder.  Without this, our wrapper stays installed forever
++-- and references the original (pre-update) function even if LFT is updated.
++function WT_UnhookLFT()
++    if not lftHooked then return end
++    if LFT_UpdateGroupsList_WTOriginal then
++        LFT_UpdateGroupsList = LFT_UpdateGroupsList_WTOriginal
++        LFT_UpdateGroupsList_WTOriginal = nil
++    end
++    lftHooked = false
++end
++
+ 
+ -- ============================================================================
+ function WT_HookGameTooltip()
+@@ -397,6 +421,8 @@
+ 
+     local nextByte = string.byte(str, maxBytes + 1)
+     if nextByte and nextByte >= 128 and nextByte <= 191 then
++        -- The cut would land in the middle of a multi-byte UTF-8 sequence.
++        -- Walk backwards until we find a leading byte (>= 192) or hit position 0.
+         local bytePos = maxBytes
+         while bytePos > 0 do
+             local b = string.byte(str, bytePos)
+@@ -405,6 +431,10 @@
+             end
+             bytePos = bytePos - 1
+         end
++        -- L8 fix: guard against bytePos reaching 0 (malformed UTF-8 with
++        -- only continuation bytes up to maxBytes).  Old code returned the
++        -- full string via sub(str, 1, -1) in that case.
++        if bytePos <= 1 then return "" end
+         return string.sub(str, 1, bytePos - 1)
+     else
+         return string.sub(str, 1, maxBytes)
+@@ -468,7 +498,7 @@
+                             capturedThis.AddMessage = WT_ChatFrame_AddMessage_Hook
+ 
+                             local origOk, origErr = pcall(origScript)
+-							
++                                                        
+                             capturedThis.AddMessage = capturedThis.wtOrigAddMsg
+ 
+                             if not origOk then
+@@ -672,13 +702,25 @@
+                                 capturedThis.wtPendingArgs = nil
+                             end
+ 
+-                            textToTranslate = SafeUTF8Truncate(textToTranslate, 75)
++                            -- C8 fix: raise the cap from 75 to 500 bytes.  The old 75-byte
++                            -- limit silently truncated longer messages and then cached the
++                            -- truncated translation under the FULL message text — so the
++                            -- truncated translation was returned forever for that key.
++                            -- We now cache under the truncated text too so a later
++                            -- occurrence of the same (truncated) prefix hits cache cleanly.
++                            textToTranslate = SafeUTF8Truncate(textToTranslate, 500)
+ 
+-                            local apiQueued = WoWTranslate_API.Translate(textToTranslate, function(translation, err)
++                            local apiQueued, rejectReason = WoWTranslate_API.Translate(textToTranslate, function(translation, err)
+                                 if translation and translation ~= "" then
+                                     WT_DebugLog("Translation:", string.sub(translation, 1, 50))
+                                     WT_translationErrWarnShown = false
++                                    -- C8 fix: cache under BOTH the full message (so the
++                                    -- next occurrence hits) AND the truncated text (so
++                                    -- the same truncation elsewhere hits immediately).
+                                     WoWTranslate_CacheSave(capturedArg1, translation)
++                                    if textToTranslate ~= capturedArg1 then
++                                        WoWTranslate_CacheSave(textToTranslate, translation)
++                                    end
+                                     local reconstructed = WT_ReconstructMessage(segments, translation)
+                                     if replacePendingKey then
+                                         WT_pendingMessages[replacePendingKey] = nil
+@@ -713,7 +755,24 @@
+                                     end
+                                 end
+                             end, detectedLang)
+-                            if apiQueued and replacePendingData then
++                            -- C6 fix: when Translate() rejects the request, flush the
++                            -- original so the user still sees the message (in replaceMode
++                            -- the original was suppressed into wtPendingArgs; without
++                            -- this flush it would never be shown).  For "deduped" we
++                            -- leave the original suppressed — another frame's callback
++                            -- will broadcast the translation to all registered targets,
++                            -- including this one.
++                            if not apiQueued then
++                                if rejectReason ~= "deduped" then
++                                    -- queue_full or rate_limited: remove ourselves from
++                                    -- the target map (another frame's callback would
++                                    -- otherwise post a duplicate to us) and flush.
++                                    if WT_frameTranslationTargets[capturedArg1] then
++                                        WT_frameTranslationTargets[capturedArg1][capturedThis] = nil
++                                    end
++                                    WT_ChatFrame_FlushOriginal(capturedThis)
++                                end
++                            elseif replacePendingData then
+                                 replacePendingKey = "r|" .. tostring(capturedThis) .. "|" .. capturedArg1
+                                 replacePendingData.timestamp = GetTime()
+                                 WT_pendingMessages[replacePendingKey] = replacePendingData
+@@ -747,14 +806,18 @@
+ 
+ 
+ function WT_SafeSendChatMessage(msg, chatType, language, channel)
++    -- C3 fix: call through the chain (WT_nextSendChatMessage) when our hook
++    -- is installed, so other addons' wrappers stay in the chain.  Fall back
++    -- to the original snapshot if our hook is not installed.
++    local sendFn = WT_nextSendChatMessage or WT_originalSendChatMessage
+     if channel ~= nil then
+-        return WT_originalSendChatMessage(msg, chatType, language, channel)
++        return sendFn(msg, chatType, language, channel)
+     elseif language ~= nil then
+-        return WT_originalSendChatMessage(msg, chatType, language)
++        return sendFn(msg, chatType, language)
+     elseif chatType ~= nil then
+-        return WT_originalSendChatMessage(msg, chatType)
++        return sendFn(msg, chatType)
+     else
+-        return WT_originalSendChatMessage(msg)
++        return sendFn(msg)
+     end
+ end
+ 
+@@ -848,19 +911,13 @@
+         return WT_SafeSendChatMessage(msg, chatType, language, channel)
+     end
+ 
+-    -- Check exact match on full message first to bypass segmenting/API entirely
++    -- Check exact match on the segment-level translatable text (L9 fix).
++    -- Running the exact-match check on the raw msg with hyperlinks caused
++    -- WT_ReconstructMessage to fail to find placeholders for links, since
++    -- the glossary result was a translation of the raw msg, not the
++    -- segmented text.  Now we segment first, then check exact match on
++    -- the assembled translatable text.
+     local outFromLang = WoWTranslateDB.outgoingFromLang or "en"
+-    local exactGlossaryResult = nil
+-    if outFromLang == "en" then
+-        local preprocessed = WT_PreprocessOutgoing(msg)
+-        if WoWTranslate_CheckOutGlossaryExact then
+-            exactGlossaryResult = WoWTranslate_CheckOutGlossaryExact(preprocessed)
+-        end
+-    else
+-        if WoWTranslate_CheckGlossaryExact then
+-            exactGlossaryResult = WoWTranslate_CheckGlossaryExact(msg)
+-        end
+-    end
+ 
+     -- Split message into segments (text and hyperlinks) to preserve links
+     local segments = WT_SplitIntoSegments(msg)
+@@ -873,6 +930,18 @@
+     local textToTranslate = WT_BuildTranslatableText(segments)
+     WT_DebugLog("Outgoing to translate:", textToTranslate)
+ 
++    -- Exact glossary check on the SEGMENTED text (post-preprocessing).
++    local exactGlossaryResult = nil
++    if outFromLang == "en" then
++        if WoWTranslate_CheckOutGlossaryExact then
++            exactGlossaryResult = WoWTranslate_CheckOutGlossaryExact(textToTranslate)
++        end
++    else
++        if WoWTranslate_CheckGlossaryExact then
++            exactGlossaryResult = WoWTranslate_CheckGlossaryExact(textToTranslate)
++        end
++    end
++
+     -- If exact glossary match was found, reconstruct and send immediately without calling DLL
+     if exactGlossaryResult then
+         local reconstructed = WT_ReconstructMessage(segments, exactGlossaryResult)
+@@ -893,8 +962,10 @@
+             finalMsg = reconstructed
+         end
+ 
++        -- C7 fix: use SafeUTF8Truncate so we don't split a multi-byte
++        -- UTF-8 sequence when the final message exceeds the 255-byte cap.
+         if string.len(finalMsg) > 255 then
+-            finalMsg = string.sub(finalMsg, 1, 252) .. "..."
++            finalMsg = SafeUTF8Truncate(finalMsg, 252) .. "..."
+         end
+ 
+         WT_SafeSendChatMessage(finalMsg, chatType, language, channel)
+@@ -957,9 +1028,10 @@
+                 finalMsg = reconstructed
+             end
+ 
+-            -- Truncate if over 255 bytes (WoW chat limit)
++            -- C7 fix: use SafeUTF8Truncate so we don't split a multi-byte
++            -- UTF-8 sequence when the final message exceeds the 255-byte cap.
+             if string.len(finalMsg) > 255 then
+-                finalMsg = string.sub(finalMsg, 1, 252) .. "..."
++                finalMsg = SafeUTF8Truncate(finalMsg, 252) .. "..."
+             end
+ 
+             WT_SafeSendChatMessage(finalMsg, queued.chatType, queued.language, queued.channel)
+@@ -978,25 +1050,47 @@
+     end)
+ end
+ 
++-- ============================================================================
++-- OUTGOING HOOK (chain pattern — C3 fix)
++-- ============================================================================
++-- We chain-hook SendChatMessage instead of overwriting it.  When we install,
++-- we capture whatever function is currently installed (which may itself be
++-- another addon's wrapper) and call through it.  When we uninstall, we
++-- restore that captured function.  This way we don't clobber later-loaded
++-- addons and they don't clobber us.
++
+ -- Track if hook is installed (for diagnostics)
+ local outgoingHookInstalled = false
++-- WT_nextSendChatMessage is forward-declared at the top of this file so all
++-- functions share the same upvalue.  It holds the function that was installed
++-- on SendChatMessage at install time (could be the Blizzard global or another
++-- addon's wrapper); we call through it so other addons stay in the chain.
+ 
+ -- Install the outgoing message hook
+ function WT_InstallOutgoingHook()
+-    if SendChatMessage ~= WT_HookedSendChatMessage then
+-        WT_DebugLog("Installing outgoing SendChatMessage hook")
+-        SendChatMessage = WT_HookedSendChatMessage
+-        outgoingHookInstalled = true
+-    end
++    if outgoingHookInstalled then return end
++    WT_DebugLog("Installing outgoing SendChatMessage hook (chain)")
++    -- Capture whatever is currently installed — could be the Blizzard global
++    -- or another addon's wrapper.  We call through it so its behavior is
++    -- preserved.
++    WT_nextSendChatMessage = SendChatMessage
++    SendChatMessage = WT_HookedSendChatMessage
++    outgoingHookInstalled = true
+ end
+ 
+ -- Remove the outgoing message hook
+ function WT_RemoveOutgoingHook()
++    if not outgoingHookInstalled then return end
++    -- Only restore if our wrapper is still on top.  If another addon wrapped
++    -- on top of us, we leave their wrapper in place (they own the global now)
++    -- but mark ourselves as uninstalled so WT_IsOutgoingHookActive reports
++    -- false and we stop calling through the chain.
++    WT_DebugLog("Removing outgoing SendChatMessage hook")
+     if SendChatMessage == WT_HookedSendChatMessage then
+-        WT_DebugLog("Removing outgoing SendChatMessage hook")
+-        SendChatMessage = WT_originalSendChatMessage
+-        outgoingHookInstalled = false
++        SendChatMessage = WT_nextSendChatMessage or WT_originalSendChatMessage
+     end
++    WT_nextSendChatMessage = nil
++    outgoingHookInstalled = false
+ end
+ 
+ -- Check if hook is active (for diagnostics)
+--- /tmp/orig_lf/WoWTranslate_Hyperlink.lua	2026-06-18 03:18:35.306227849 +0000
++++ WoWTranslate_Hyperlink.lua	2026-06-18 03:11:45.061727358 +0000
+@@ -82,9 +82,12 @@
+     local displayText = nil
+ 
+     -- Check for colored link: |cFFRRGGBB|H...
+-    local colorStart = string.find(link, "^|c%x%x%x%x%x%x%x%x")
++    -- M7 fix: use the start position returned by string.find instead of
++    -- hardcoding 3/10 — that broke if the link had leading whitespace.
++    local colorStart, colorEnd = string.find(link, "^|c%x%x%x%x%x%x%x%x")
+     if colorStart then
+-        colorCode = string.sub(link, 3, 10)  -- Extract FFRRGGBB
++        -- Extract the 8 hex chars (FFRRGGBB) that follow the |c prefix.
++        colorCode = string.sub(link, colorStart + 2, colorEnd)
+     end
+ 
+     -- Find |H to start of link data
+@@ -117,8 +120,11 @@
+     return linkType, linkData, displayText, colorCode
+ end
+ 
+--- Extract item ID from link data (format: itemId:enchantId:suffixId:uniqueId)
+-function WT_GetItemIdFromLinkData(linkData)
++-- M8 fix: WT_GetItemIdFromLinkData and WT_GetQuestIdFromLinkData were
++-- identical copies of the same "first colon field" logic.  Collapse them
++-- into one helper and keep the two public wrappers for backward compat.
++local function WT_GetFirstColonField(linkData)
++    if not linkData or linkData == "" then return nil end
+     local colonPos = string.find(linkData, ":")
+     if colonPos then
+         return tonumber(string.sub(linkData, 1, colonPos - 1))
+@@ -127,14 +133,14 @@
+     end
+ end
+ 
++-- Extract item ID from link data (format: itemId:enchantId:suffixId:uniqueId)
++function WT_GetItemIdFromLinkData(linkData)
++    return WT_GetFirstColonField(linkData)
++end
++
+ -- Extract quest ID from link data (format: questId:questLevel)
+ function WT_GetQuestIdFromLinkData(linkData)
+-    local colonPos = string.find(linkData, ":")
+-    if colonPos then
+-        return tonumber(string.sub(linkData, 1, colonPos - 1))
+-    else
+-        return tonumber(linkData)
+-    end
++    return WT_GetFirstColonField(linkData)
+ end
+ 
+ -- Get English quest name from pfQuest database
+@@ -571,35 +577,46 @@
+     end
+     itemCacheElapsed = 0
+ 
++    -- H2 fix: pcall the body so a throw inside WT_ProcessItemCacheMessage
++    -- (or WT_CheckItemCache) doesn't kill this OnUpdate permanently.  An
++    -- unhandled throw would leave the entry in the queue forever and the
++    -- message would never be shown to the user.
+     for cacheId, queued in pairs(WT_itemCacheQueue) do
+-        local allCached = WT_CheckItemCache(queued.itemIds, false)  -- Just check, don't trigger
+-        local elapsed = GetTime() - queued.timestamp
+-
+-        if allCached then
+-            WT_DebugLog("Items cached, processing message:", cacheId)
+-            WT_itemCacheQueue[cacheId] = nil
+-            WT_ProcessItemCacheMessage(queued)
+-        elseif elapsed > ITEM_CACHE_MAX_WAIT then
+-            -- Timeout - process anyway with whatever we have
+-            local _, stillUncached = WT_CheckItemCache(queued.itemIds, false)
+-            WT_DebugLog("Item cache timeout after", elapsed, "sec, uncached:", table.getn(stillUncached))
+-            for _, uid in ipairs(stillUncached) do
+-                WT_DebugLog("  Still uncached item ID:", uid)
+-            end
+-            WT_itemCacheQueue[cacheId] = nil
+-            WT_ProcessItemCacheMessage(queued)
+-        else
+-            -- Retry triggering cache periodically for stubborn items
+-            if not queued.lastRetry or (GetTime() - queued.lastRetry) > ITEM_CACHE_RETRY_INTERVAL then
+-                queued.lastRetry = GetTime()
+-                queued.retries = (queued.retries or 0) + 1
+-                if queued.retries <= 5 then  -- Max 5 retries
+-                    local _, stillUncached = WT_CheckItemCache(queued.itemIds, true)  -- Trigger cache again
+-                    if table.getn(stillUncached) > 0 then
+-                        WT_DebugLog("Retry", queued.retries, "- triggering cache for", table.getn(stillUncached), "items")
++        local ok, err = pcall(function()
++            local allCached = WT_CheckItemCache(queued.itemIds, false)  -- Just check, don't trigger
++            local elapsed = GetTime() - queued.timestamp
++
++            if allCached then
++                WT_DebugLog("Items cached, processing message:", cacheId)
++                WT_itemCacheQueue[cacheId] = nil
++                WT_ProcessItemCacheMessage(queued)
++            elseif elapsed > ITEM_CACHE_MAX_WAIT then
++                -- Timeout - process anyway with whatever we have
++                local _, stillUncached = WT_CheckItemCache(queued.itemIds, false)
++                WT_DebugLog("Item cache timeout after", elapsed, "sec, uncached:", table.getn(stillUncached))
++                for _, uid in ipairs(stillUncached) do
++                    WT_DebugLog("  Still uncached item ID:", uid)
++                end
++                WT_itemCacheQueue[cacheId] = nil
++                WT_ProcessItemCacheMessage(queued)
++            else
++                -- Retry triggering cache periodically for stubborn items
++                if not queued.lastRetry or (GetTime() - queued.lastRetry) > ITEM_CACHE_RETRY_INTERVAL then
++                    queued.lastRetry = GetTime()
++                    queued.retries = (queued.retries or 0) + 1
++                    if queued.retries <= 5 then  -- Max 5 retries
++                        local _, stillUncached = WT_CheckItemCache(queued.itemIds, true)  -- Trigger cache again
++                        if table.getn(stillUncached) > 0 then
++                            WT_DebugLog("Retry", queued.retries, "- triggering cache for", table.getn(stillUncached), "items")
++                        end
+                     end
+                 end
+             end
++        end)
++        if not ok then
++            WT_DebugLog("itemCacheFrame OnUpdate error for", cacheId, ":", tostring(err))
++            -- Drop the broken entry so we don't loop on it forever.
++            WT_itemCacheQueue[cacheId] = nil
+         end
+     end
+ end)
+--- /tmp/orig_lf/WoWTranslate_String.lua	2026-06-18 03:18:35.326227922 +0000
++++ WoWTranslate_String.lua	2026-06-18 03:12:08.003811251 +0000
+@@ -304,55 +304,47 @@
+ end
+ 
+ 
+--- ============================================================================
++-- ============================================================================--
+ -- SEGMENT-LEVEL TRANSLATION PREPROCESSING & GLOSSARY MATCHING
+ -- ============================================================================
+ 
++-- M9 fix: factor out the exact-then-partial glossary cascade so the same
++-- logic isn't duplicated four times across WT_ProcessSegmentsIncoming and
++-- WT_ProcessSegmentsOutgoing.  Returns the (possibly replaced) text.
++local function WT_ApplyGlossaryCascade(text, exactFn, partialFn, preprocessFn)
++    if preprocessFn then
++        text = preprocessFn(text)
++    end
++    if exactFn then
++        local exact = exactFn(text)
++        if exact then return exact end
++    end
++    if partialFn then
++        local partial = partialFn(text)
++        if partial then return partial end
++    end
++    return text
++end
++
+ -- Apply incoming preprocessing and glossary matching to each text segment individually.
+ -- This keeps the link placeholders (e.g. http://ph.wt/N) isolated and safe.
+ function WT_ProcessSegmentsIncoming(segments, detectedLang)
+     for _, seg in ipairs(segments) do
+         if seg.type == "text" then
+-            local text = seg.content
+             if detectedLang == "en" then
+-                -- EN -> ZH: check exact, then partial outgoing glossary
+-                local exact = nil
+-                if WoWTranslate_CheckOutGlossaryExact then
+-                    exact = WoWTranslate_CheckOutGlossaryExact(text)
+-                end
+-                if exact then
+-                    seg.content = exact
+-                else
+-                    local partial = nil
+-                    if WoWTranslate_CheckOutGlossaryPartial then
+-                        partial = WoWTranslate_CheckOutGlossaryPartial(text)
+-                    end
+-                    if partial then
+-                        seg.content = partial
+-                    else
+-                        seg.content = text
+-                    end
+-                end
++                -- EN -> ZH: outgoing glossary (no preprocessing on incoming EN path)
++                seg.content = WT_ApplyGlossaryCascade(
++                    seg.content,
++                    WoWTranslate_CheckOutGlossaryExact,
++                    WoWTranslate_CheckOutGlossaryPartial,
++                    nil)
+             else
+-                -- ZH -> EN (or other non-EN): preprocess and check incoming glossary
+-                text = WT_PreprocessIncoming(text)
+-                local exact = nil
+-                if WoWTranslate_CheckGlossaryExact then
+-                    exact = WoWTranslate_CheckGlossaryExact(text)
+-                end
+-                if exact then
+-                    seg.content = exact
+-                else
+-                    local partial = nil
+-                    if WoWTranslate_CheckGlossaryPartial then
+-                        partial = WoWTranslate_CheckGlossaryPartial(text)
+-                    end
+-                    if partial then
+-                        seg.content = partial
+-                    else
+-                        seg.content = text
+-                    end
+-                end
++                -- ZH -> EN (or other non-EN): preprocess + incoming glossary
++                seg.content = WT_ApplyGlossaryCascade(
++                    seg.content,
++                    WoWTranslate_CheckGlossaryExact,
++                    WoWTranslate_CheckGlossaryPartial,
++                    WT_PreprocessIncoming)
+             end
+         end
+     end
+@@ -363,46 +355,20 @@
+ function WT_ProcessSegmentsOutgoing(segments, outFromLang)
+     for _, seg in ipairs(segments) do
+         if seg.type == "text" then
+-            local text = seg.content
+             if outFromLang == "en" then
+-                -- EN -> ZH: preprocess outgoing and check exact, then partial outgoing glossary
+-                text = WT_PreprocessOutgoing(text)
+-                local exact = nil
+-                if WoWTranslate_CheckOutGlossaryExact then
+-                    exact = WoWTranslate_CheckOutGlossaryExact(text)
+-                end
+-                if exact then
+-                    seg.content = exact
+-                else
+-                    local partial = nil
+-                    if WoWTranslate_CheckOutGlossaryPartial then
+-                        partial = WoWTranslate_CheckOutGlossaryPartial(text)
+-                    end
+-                    if partial then
+-                        seg.content = partial
+-                    else
+-                        seg.content = text
+-                    end
+-                end
++                -- EN -> ZH: preprocess outgoing + outgoing glossary
++                seg.content = WT_ApplyGlossaryCascade(
++                    seg.content,
++                    WoWTranslate_CheckOutGlossaryExact,
++                    WoWTranslate_CheckOutGlossaryPartial,
++                    WT_PreprocessOutgoing)
+             else
+-                -- ZH -> EN (or other non-EN source): check exact, then partial incoming glossary
+-                local exact = nil
+-                if WoWTranslate_CheckGlossaryExact then
+-                    exact = WoWTranslate_CheckGlossaryExact(text)
+-                end
+-                if exact then
+-                    seg.content = exact
+-                else
+-                    local partial = nil
+-                    if WoWTranslate_CheckGlossaryPartial then
+-                        partial = WoWTranslate_CheckGlossaryPartial(text)
+-                    end
+-                    if partial then
+-                        seg.content = partial
+-                    else
+-                        seg.content = text
+-                    end
+-                end
++                -- ZH -> EN (or other non-EN source): incoming glossary, no preprocessing
++                seg.content = WT_ApplyGlossaryCascade(
++                    seg.content,
++                    WoWTranslate_CheckGlossaryExact,
++                    WoWTranslate_CheckGlossaryPartial,
++                    nil)
+             end
+         end
+     end
+--- /tmp/orig_lf/WoWTranslate_Tooltip.lua	2026-06-18 03:18:35.337227962 +0000
++++ WoWTranslate_Tooltip.lua	2026-06-18 03:12:34.493908122 +0000
+@@ -63,11 +63,16 @@
+     if unit then return unit end
+     unit = matchUnit("player")
+     if unit then return unit end
+-    for i = 1, 4 do
++    -- L4 fix: use GetNumPartyMembers/GetNumRaidMembers so we don't probe
++    -- 40+ empty unit ids when solo.  In WoW 1.12 these return 0 when not
++    -- in a group/raid.
++    local nParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
++    for i = 1, nParty do
+         unit = matchUnit("party" .. i)
+         if unit then return unit end
+     end
+-    for i = 1, 40 do
++    local nRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
++    for i = 1, nRaid do
+         unit = matchUnit("raid" .. i)
+         if unit then return unit end
+     end
+@@ -208,8 +213,13 @@
+ 
+     if not ok then
+         -- Queue full; poll cache briefly so the waiter doesn't hang.
++        -- H4 fix: Hide() the poll frame after we're done with it.  Old code
++        -- cleared the OnUpdate script but left the Frame alive and visible,
++        -- which over a long session accumulated many hidden frames (each
++        -- frame participates in every OnUpdate dispatch in WoW 1.12).
+         local retries = 0
+         local pollFrame = CreateFrame("Frame")
++        pollFrame:Hide()
+         local elapsed = 0
+         pollFrame:SetScript("OnUpdate", function()
+             elapsed = elapsed + arg1
+@@ -218,13 +228,16 @@
+             retries = retries + 1
+             local c, hit = WoWTranslate_CacheGet(cacheKey)
+             if hit then
++                pollFrame:Hide()
+                 pollFrame:SetScript("OnUpdate", nil)
+                 finish(c)
+             elseif retries >= 50 then
++                pollFrame:Hide()
+                 pollFrame:SetScript("OnUpdate", nil)
+                 finish(rawName)
+             end
+         end)
++        pollFrame:Show()
+     end
+ end
+ 
+@@ -1275,9 +1288,13 @@
+ -- link we translate the name and print "[WT]: Name = Translation".
+ -- If Translate() can't queue (rate limited / DLL busy) we fall through so the
+ -- normal right-click context menu still opens — no silent failures.
++-- M5 fix: save the original on a stable field so we can unhook later
++-- (WT_UnhookHyperlinkShow) without losing other addons' wrappers.
+ function WT_HookHyperlinkShow()
+-    local origHyperlink = ChatFrame_OnHyperlinkShow
+-    if not origHyperlink then return end
++    if not ChatFrame_OnHyperlinkShow then return end
++    if ChatFrame_OnHyperlinkShow_WTOriginal then return end
++    ChatFrame_OnHyperlinkShow_WTOriginal = ChatFrame_OnHyperlinkShow
++    local origHyperlink = ChatFrame_OnHyperlinkShow_WTOriginal
+ 
+     ChatFrame_OnHyperlinkShow = function(link, text, button)
+         local capturedFrame = this
+@@ -1303,6 +1320,18 @@
+     end
+ end
+ 
++-- M5 fix: restore the original ChatFrame_OnHyperlinkShow.  Useful if the
++-- user wants to disable the Shift+RightClick lookup, and prevents our
++-- wrapper from holding a stale reference to the original if another addon
++-- updates ChatFrame_OnHyperlinkShow later.
++function WT_UnhookHyperlinkShow()
++    if not ChatFrame_OnHyperlinkShow_WTOriginal then return end
++    if ChatFrame_OnHyperlinkShow then
++        ChatFrame_OnHyperlinkShow = ChatFrame_OnHyperlinkShow_WTOriginal
++    end
++    ChatFrame_OnHyperlinkShow_WTOriginal = nil
++end
++
+ function WT_OnPlayerLogin()
+     WT_HookChatFrames()
+     WT_HookHyperlinkShow()
