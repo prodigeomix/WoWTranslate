@@ -404,14 +404,13 @@ def _call_gemini(text, from_lang, to_lang, backend):
     if not api_key or api_key.startswith("YOUR_") or api_key == "AIzaSy...":
         raise ValueError("Gemini api_key not configured (please paste your Google AI Studio key in config.toml)")
 
-    model = backend.get("model", "gemini-2.0-flash")
+    model = backend.get("model", "gemini-2.5-flash")
     timeout = backend.get("timeout", 10)
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     system_prompt = (
         "You are an expert translator for World of Warcraft Classic.\n"
         "Translate chat accurately, preserving MMO terms (LFG, DPS, MT, OT, CC, etc.) and placeholders (http://ph.wt/1).\n"
-        "Output ONLY the translated text without quotes, markdown formatting, or preamble."
+        "Output ONLY the translated plain text without quotes, markdown bolding, explanations, or preamble."
     )
     payload = json.dumps({
         "contents": [
@@ -427,22 +426,46 @@ def _call_gemini(text, from_lang, to_lang, backend):
         }
     }).encode("utf-8")
     
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        headers={"Content-Type": "application/json", "User-Agent": "WoWTranslateProxy/3.5"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    
-    candidates = data.get("candidates", [])
-    if not candidates:
-        raise ValueError("Gemini returned no candidates")
-    parts = candidates[0].get("content", {}).get("parts", [])
-    if not parts:
-        raise ValueError("Gemini returned no content parts")
-    return parts[0].get("text", "").strip()
+    # Try configured model, fallback to gemini-2.5-flash on 404
+    models_to_try = [model]
+    if model != "gemini-2.5-flash":
+        models_to_try.append("gemini-2.5-flash")
+    if "gemini-3.6-flash" not in models_to_try:
+        models_to_try.append("gemini-3.6-flash")
+
+    last_exc = None
+    for m in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json", "User-Agent": "WoWTranslateProxy/3.5"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            candidates = data.get("candidates", [])
+            if not candidates:
+                raise ValueError("Gemini returned no candidates")
+            parts = candidates[0].get("content", {}).get("parts", [])
+            if not parts:
+                raise ValueError("Gemini returned no content parts")
+            result = parts[0].get("text", "").strip()
+            # Clean up markdown bolding or quotes if any
+            result = re.sub(r"^\*+(.*?)\*+$", r"\1", result)
+            result = re.sub(r'^["\'](.*)["\']$', r"\1", result)
+            return result.strip()
+        except urllib.error.HTTPError as he:
+            last_exc = he
+            if he.code == 404:
+                continue
+            raise he
+        except Exception as e:
+            last_exc = e
+            raise e
+
+    raise last_exc or ValueError("Gemini request failed")
 
 BACKEND_FNS = {
     "gemini": _call_gemini,
