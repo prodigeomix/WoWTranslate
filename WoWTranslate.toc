@@ -1,0 +1,19 @@
+## Interface: 11200
+## Title: WoWTranslate
+## Notes: Real-time chat & tooltip translation for WoW 1.12.1 (Vanilla / Turtle WoW)
+## Version: 1.6
+## Author: belthazor, WoWTranslateTeam
+## SavedVariables: WoWTranslateDB WoWTranslateCache WoWTranslateDebugLog WoWTranslateCacheOrder WoWTranslateCacheCounter
+
+WoWTranslate_Glossary.lua
+WoWTranslate_OutGlossary.lua
+WoWTranslate_Globals.lua
+WoWTranslate_String.lua
+WoWTranslate_Hyperlink.lua
+WoWTranslate_Tooltip.lua
+WoWTranslate_Hooks.lua
+WoWTranslate_Cache.lua
+WoWTranslate_API.lua
+WoWTranslate_Config.lua
+WoWTranslate_Minimap.lua
+WoWTranslate.lua

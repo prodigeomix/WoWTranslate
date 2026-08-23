@@ -1,0 +1,41 @@
+# WoWTranslate Proxy Configuration
+# ==================================
+# Port and runtime settings
+http_port = 7654
+workers = 4
+cache_db = "translations.db"
+stale_ttl = 60
+scan_interval = 0.05
+
+# ---------------------------------------------------------------------------
+# Translation Backends (tried in order; falls back to next if one fails)
+# ---------------------------------------------------------------------------
+
+# Backend 1: OpenAI / ChatGPT (Cloud LLM)
+# To use: Paste your OpenAI API key below (or set OPENAI_API_KEY environment variable)
+[[backends]]
+type = "openai"
+api_key = "sk-YOUR-API-KEY-HERE"
+model = "gpt-4o-mini"
+base_url = "https://api.openai.com/v1"
+timeout = 10
+
+# Backend 2: Ollama (Local LLM, 100% offline, free)
+# Install from https://ollama.com and run: ollama pull qwen2.5
+[[backends]]
+type = "ollama"
+url = "http://localhost:11434/api/generate"
+model = "qwen2.5"
+timeout = 5
+
+# Backend 3: DeepL Free / Pro API (Optional)
+# Sign up at https://www.deepl.com/pro-api and paste your key below
+# [[backends]]
+# type = "deepl"
+# api_key = "YOUR_DEEPL_AUTH_KEY:fx"
+# timeout = 15
+
+# Backend 4: Google Translate Web Client (Free Fallback — zero setup!)
+[[backends]]
+type = "google"
+timeout = 8

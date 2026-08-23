@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local SQLite databases & IPC runtime files
+*.db
+*.db-journal
+translations.db
+IPC/requests/*
+IPC/results/*
+IPC/ping
+IPC/pong
+IPC/proxy_ready
+
+# Secrets & Local Overrides
+.env
+*.env
+*.key
+*.local.toml
+config.local.toml
+
+# OS generated files
+.DS_Store
+Thumbs.db
