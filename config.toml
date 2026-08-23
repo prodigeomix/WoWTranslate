@@ -43,7 +43,7 @@ timeout = 5
 # api_key = "YOUR_DEEPL_AUTH_KEY:fx"
 # timeout = 15
 
-# Backend 5: Google Translate Web Client (Free Fallback â€” zero setup!)
+# Backend 5: Google Translate Web Client (Free Fallback — zero setup!)
 [[backends]]
 type = "google"
 timeout = 8
