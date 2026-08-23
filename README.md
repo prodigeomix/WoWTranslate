@@ -15,50 +15,58 @@ Follow these 3 simple steps to get it running. No programming knowledge required
 
 ### 🟢 STEP 1: Download & Install Ollama
 
-You can install Ollama either through your web browser OR with a single PowerShell command:
+Choose **either** Method A (PowerShell) or Method B (Browser):
 
-#### Option A: Using PowerShell (Fastest - Copy & Paste)
-1. Right-click your Windows **Start menu** icon and click **Windows PowerShell** (or **Terminal**).
-2. Paste this command and press **Enter**:
+#### Method A: 1-Click Install via PowerShell (Fastest)
+1. Right-click your Windows **Start menu button** and click **"Terminal"** or **"Windows PowerShell"**.
+2. Copy and paste this command, then press **Enter**:
    ```powershell
    winget install Ollama.Ollama
    ```
-   *(Or if you don't have winget, copy-paste this direct download & install line:)*
+   *(Or if winget is not installed on your Windows, copy-paste this direct download line:)*
    ```powershell
    Invoke-WebRequest -Uri "https://ollama.com/download/OllamaSetup.exe" -OutFile "$env:TEMP\OllamaSetup.exe"; Start-Process "$env:TEMP\OllamaSetup.exe" -Wait
    ```
 
-#### Option B: Using Web Browser
+#### Method B: Standard Browser Download
 1. Go to **[https://ollama.com](https://ollama.com)** in your web browser.
 2. Click the big **"Download for Windows"** button.
-3. Open the downloaded file (`OllamaSetup.exe`) and click **Install**.
+3. Run the downloaded `OllamaSetup.exe` file and click **Install**.
 
-> Once installed, the Ollama llama icon will appear in your Windows system tray (bottom-right next to the clock).
+> **Verification:** Once installed, an Ollama llama icon will appear in your Windows bottom-right system tray (next to the clock).
 
 ---
 
-### 🟢 STEP 2: Download the Free AI Translation Model
-Now, tell Ollama to download the translation model (the AI brain):
+### 🟢 STEP 2: Download the Free AI Translation Model (Using CMD / PowerShell)
 
-1. Open **PowerShell** or Command Prompt (`cmd`).
-2. Copy and paste **ONE** of the following lines, then press **Enter**:
+To download the AI translation brain onto your computer, run a single command in **Command Prompt (CMD)** or **PowerShell**:
+
+1. **Open Command Prompt (CMD):**
+   - On your keyboard, press the **`Windows Key + R`** keys together (or type `cmd` in your Windows search bar).
+   - In the small "Run" box that pops up, type **`cmd`** and press **Enter**.
+   - *(A black Command Prompt window will open)*.
+
+2. **Paste the Download Command:**
+   - In the black CMD window, copy and paste **ONE** of the following lines based on your computer, then press **Enter**:
 
    * **For most computers & gaming PCs (Recommended):**
-     ```bash
+     ```cmd
      ollama pull qwen2.5
      ```
 
    * **For older laptops / slower PCs (Lighter & faster):**
-     ```bash
+     ```cmd
      ollama pull qwen2.5:3b
      ```
 
    * **For powerful gaming PCs (8GB+ GPU VRAM - Highest Accuracy):**
-     ```bash
+     ```cmd
      ollama pull qwen2.5:7b
      ```
 
-4. You will see a download progress bar `[=======> 100%]`. Once it says **`success`**, close the black window!
+3. **Wait for Download to Finish:**
+   - You will see a download progress bar: `[=======> 100%]`.
+   - Once it finishes and says **`success`**, Ollama is ready! You can now close the black CMD window.
 
 ---
 
