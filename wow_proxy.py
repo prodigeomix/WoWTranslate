@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5  —  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5  Ã¢â‚¬â€  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -21,7 +21,7 @@ Translation Backends (ordered priority with automatic fallback):
   - Ollama (local offline LLM, e.g. qwen2.5)
   - DeepL (Free or Pro API key)
   - OpenAI (gpt-4o-mini / compatible endpoints)
-  - Google Translate (built-in free web client fallback — zero setup required!)
+  - Google Translate (built-in free web client fallback Ã¢â‚¬â€ zero setup required!)
 
 Persistent SQLite Cache (translations.db):
   Instant translation responses for previously translated text.
@@ -86,7 +86,7 @@ def load_config(path):
         print(f"[config] No config file found at '{path}', using defaults.")
         return dict(DEFAULT_CONFIG)
     if tomllib is None:
-        print("[config] tomllib/tomli not installed — using defaults.")
+        print("[config] tomllib/tomli not installed Ã¢â‚¬â€ using defaults.")
         return dict(DEFAULT_CONFIG)
     try:
         with open(path, "rb") as f:
@@ -337,35 +337,62 @@ def _call_openai(text, from_lang, to_lang, backend):
     return choices[0]["message"]["content"].strip()
 
 def _call_google(text, from_lang, to_lang, backend):
-    """Free Google Translate web API fallback (zero configuration required)."""
+    """Free Google Translate web API fallback with multi-endpoint rotation against 429 rate limits."""
     timeout = backend.get("timeout", 8)
     sl = from_lang.lower()
     tl = to_lang.lower()
     encoded = urllib.parse.quote(text)
-    url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={sl}&tl={tl}&dt=t&q={encoded}"
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-    }
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read().decode("utf-8")
-        data = json.loads(raw)
-        
-    # Result format: [[[translated_seg1, src_seg1, ...], [translated_seg2, ...]], ...]
-    if not data or not isinstance(data, list) or not data[0]:
-        raise ValueError("Invalid Google Translate response format")
-    
-    parts = []
-    for seg in data[0]:
-        if seg and isinstance(seg, list) and seg[0]:
-            parts.append(seg[0])
-    
-    result = "".join(parts).strip()
-    if not result:
-        raise ValueError("Google Translate returned empty text")
-    return result
+    # 1. Primary: translate.googleapis.com
+    try:
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={sl}&tl={tl}&dt=t&q={encoded}"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+        })
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if data and isinstance(data, list) and data[0]:
+            parts = [seg[0] for seg in data[0] if seg and isinstance(seg, list) and seg[0]]
+            res = "".join(parts).strip()
+            if res:
+                return res
+    except Exception as e:
+        if "429" not in str(e):
+            pass
+
+    # 2. Secondary: clients5.google.com
+    try:
+        url2 = f"https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl={sl}&tl={tl}&q={encoded}"
+        req2 = urllib.request.Request(url2, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        })
+        with urllib.request.urlopen(req2, timeout=timeout) as resp:
+            data2 = json.loads(resp.read().decode("utf-8"))
+        if isinstance(data2, list) and len(data2) > 0:
+            if isinstance(data2[0], str) and data2[0].strip():
+                return data2[0].strip()
+            elif isinstance(data2[0], list) and len(data2[0]) > 0 and isinstance(data2[0][0], str):
+                return data2[0][0].strip()
+    except Exception:
+        pass
+
+    # 3. Tertiary: translate.google.com/m mobile endpoint
+    try:
+        url3 = f"https://translate.google.com/m?sl={sl}&tl={tl}&q={encoded}"
+        req3 = urllib.request.Request(url3, headers={
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        })
+        with urllib.request.urlopen(req3, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+        match = re.search(r'class="result-container">([^<]+)', raw)
+        if match:
+            import html
+            return html.unescape(match.group(1)).strip()
+    except Exception as e3:
+        raise ValueError(f"Google Translate rate limit / connection error ({e3})")
+
+    raise ValueError("Google Translate returned empty response across all endpoints")
 
 def _call_gemini(text, from_lang, to_lang, backend):
     """Google AI Studio (Gemini) API Backend."""
@@ -443,7 +470,7 @@ def translate(text, from_lang, to_lang, backends):
             if result:
                 # Clean up apostrophe space artifact e.g. "doesn' t" -> "doesn't"
                 result = re.sub(r"'%s+(\w)", r"'\1", result)
-                print(f"[translate] [{btype}] {from_lang}→{to_lang}: '{text[:40]}' → '{result[:40]}'")
+                print(f"[translate] [{btype}] {from_lang}Ã¢â€ â€™{to_lang}: '{text[:40]}' Ã¢â€ â€™ '{result[:40]}'")
                 return result, None
         except Exception as e:
             last_err = f"{btype}: {e}"
@@ -457,7 +484,7 @@ def translate(text, from_lang, to_lang, backends):
             print("[translate] Attempting automatic Google fallback...")
             res = _call_google(text, from_lang, to_lang, {"timeout": 8})
             if res:
-                print(f"[translate] [google-fallback] {from_lang}→{to_lang}: '{text[:40]}' → '{res[:40]}'")
+                print(f"[translate] [google-fallback] {from_lang}Ã¢â€ â€™{to_lang}: '{text[:40]}' Ã¢â€ â€™ '{res[:40]}'")
                 return res, None
         except Exception as e:
             last_err = f"google-fallback: {e}"
@@ -756,10 +783,13 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                 try:
                     with open(req_path, "r", encoding="utf-8") as f:
                         content = f.read().strip()
+                    if not content:
+                        continue
                     from_lang, to_lang, text = parse_request_file(content)
                 except Exception as e:
-                    print(f"[proxy] Error parsing {fname}: {e}")
-                    _safe_delete(req_path)
+                    if age > 1.0:
+                        print(f"[proxy] Error parsing {fname}: {e}")
+                        _safe_delete(req_path)
                     continue
 
                 # Cache check
@@ -767,7 +797,7 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                 if cached:
                     _write_ipc_result(req_id, "ok", cached, ipc_targets)
                     _safe_delete(req_path)
-                    print(f"[proxy] [cache-hit] {from_lang}→{to_lang}: '{text[:40]}'")
+                    print(f"[proxy] [cache-hit] {from_lang}Ã¢â€ â€™{to_lang}: '{text[:40]}'")
                     continue
 
                 in_flight.add(req_id)
