@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5  â€”  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5  —  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -21,7 +21,7 @@ Translation Backends (ordered priority with automatic fallback):
   - Ollama (local offline LLM, e.g. qwen2.5)
   - DeepL (Free or Pro API key)
   - OpenAI (gpt-4o-mini / compatible endpoints)
-  - Google Translate (built-in free web client fallback â€” zero setup required!)
+  - Google Translate (built-in free web client fallback — zero setup required!)
 
 Persistent SQLite Cache (translations.db):
   Instant translation responses for previously translated text.
@@ -86,7 +86,7 @@ def load_config(path):
         print(f"[config] No config file found at '{path}', using defaults.")
         return dict(DEFAULT_CONFIG)
     if tomllib is None:
-        print("[config] tomllib/tomli not installed â€” using defaults.")
+        print("[config] tomllib/tomli not installed — using defaults.")
         return dict(DEFAULT_CONFIG)
     try:
         with open(path, "rb") as f:
@@ -443,7 +443,7 @@ def translate(text, from_lang, to_lang, backends):
             if result:
                 # Clean up apostrophe space artifact e.g. "doesn' t" -> "doesn't"
                 result = re.sub(r"'%s+(\w)", r"'\1", result)
-                print(f"[translate] [{btype}] {from_lang}â†’{to_lang}: '{text[:40]}' â†’ '{result[:40]}'")
+                print(f"[translate] [{btype}] {from_lang}→{to_lang}: '{text[:40]}' → '{result[:40]}'")
                 return result, None
         except Exception as e:
             last_err = f"{btype}: {e}"
@@ -457,7 +457,7 @@ def translate(text, from_lang, to_lang, backends):
             print("[translate] Attempting automatic Google fallback...")
             res = _call_google(text, from_lang, to_lang, {"timeout": 8})
             if res:
-                print(f"[translate] [google-fallback] {from_lang}â†’{to_lang}: '{text[:40]}' â†’ '{res[:40]}'")
+                print(f"[translate] [google-fallback] {from_lang}→{to_lang}: '{text[:40]}' → '{res[:40]}'")
                 return res, None
         except Exception as e:
             last_err = f"google-fallback: {e}"
@@ -767,7 +767,7 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                 if cached:
                     _write_ipc_result(req_id, "ok", cached, ipc_targets)
                     _safe_delete(req_path)
-                    print(f"[proxy] [cache-hit] {from_lang}â†’{to_lang}: '{text[:40]}'")
+                    print(f"[proxy] [cache-hit] {from_lang}→{to_lang}: '{text[:40]}'")
                     continue
 
                 in_flight.add(req_id)
