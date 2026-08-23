@@ -8,7 +8,7 @@
 -- functions in this file (defined before OR after the install/uninstall
 -- functions) share the same storage.  Without this, the `local` declared
 -- later in the file would not be visible to WT_SafeSendChatMessage, which
--- is defined earlier — they'd silently use different storage locations.
+-- is defined earlier â€” they'd silently use different storage locations.
 local WT_nextSendChatMessage
 
 
@@ -565,6 +565,10 @@ function WT_HookChatFrames(force)
                                 WT_ChatFrame_FlushOriginal(capturedThis)
                                 return
                             end
+                            if capturedArg2 and UnitName and capturedArg2 == UnitName("player") then
+                                WT_ChatFrame_FlushOriginal(capturedThis)
+                                return
+                            end
                             if string.sub(capturedArg1, 1, 1) == "#" then
                                 WT_ChatFrame_FlushOriginal(capturedThis)
                                 return
@@ -573,20 +577,11 @@ function WT_HookChatFrames(force)
                                string.find(capturedArg1, "^BGTBL,") or
                                string.find(capturedArg1, "^Atlas: Version:") or
                                string.find(capturedArg1, "^Bath:V:") or
-                               string.find(capturedArg1, "%[Translated by chat translator addon%] Session:") or
+                               string.find(capturedArg1, "%[Translated by chat translator addon%]") or
+                               string.find(capturedArg1, "WoWTranslate", 1, true) or
                                string.find(capturedArg1, "^Session: V: ") then
                                 WT_ChatFrame_FlushOriginal(capturedThis)
                                 return
-                            end
-                            do
-                                local p = string.find(capturedArg1, "WoWTranslate", 1, true)
-                                if p and p <= 50 then
-                                    local closeBracket = string.find(capturedArg1, "]", p, true)
-                                    if closeBracket then
-                                        local stripped = string.gsub(string.sub(capturedArg1, closeBracket + 1), "^%s+", "")
-                                        if stripped ~= "" then capturedArg1 = stripped end
-                                    end
-                                end
                             end
 
                             local detectedLang = WT_DetectSourceLanguage(capturedArg1)
@@ -704,7 +699,7 @@ function WT_HookChatFrames(force)
 
                             -- C8 fix: raise the cap from 75 to 500 bytes.  The old 75-byte
                             -- limit silently truncated longer messages and then cached the
-                            -- truncated translation under the FULL message text — so the
+                            -- truncated translation under the FULL message text â€” so the
                             -- truncated translation was returned forever for that key.
                             -- We now cache under the truncated text too so a later
                             -- occurrence of the same (truncated) prefix hits cache cleanly.
@@ -759,7 +754,7 @@ function WT_HookChatFrames(force)
                             -- original so the user still sees the message (in replaceMode
                             -- the original was suppressed into wtPendingArgs; without
                             -- this flush it would never be shown).  For "deduped" we
-                            -- leave the original suppressed — another frame's callback
+                            -- leave the original suppressed â€” another frame's callback
                             -- will broadcast the translation to all registered targets,
                             -- including this one.
                             if not apiQueued then
@@ -1051,7 +1046,7 @@ function WT_HookedSendChatMessage(msg, chatType, language, channel)
 end
 
 -- ============================================================================
--- OUTGOING HOOK (chain pattern — C3 fix)
+-- OUTGOING HOOK (chain pattern â€” C3 fix)
 -- ============================================================================
 -- We chain-hook SendChatMessage instead of overwriting it.  When we install,
 -- we capture whatever function is currently installed (which may itself be
@@ -1070,7 +1065,7 @@ local outgoingHookInstalled = false
 function WT_InstallOutgoingHook()
     if outgoingHookInstalled then return end
     WT_DebugLog("Installing outgoing SendChatMessage hook (chain)")
-    -- Capture whatever is currently installed — could be the Blizzard global
+    -- Capture whatever is currently installed â€” could be the Blizzard global
     -- or another addon's wrapper.  We call through it so its behavior is
     -- preserved.
     WT_nextSendChatMessage = SendChatMessage
