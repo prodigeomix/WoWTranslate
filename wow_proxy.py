@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5  —  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5  â€”  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -21,7 +21,7 @@ Translation Backends (ordered priority with automatic fallback):
   - Ollama (local offline LLM, e.g. qwen2.5)
   - DeepL (Free or Pro API key)
   - OpenAI (gpt-4o-mini / compatible endpoints)
-  - Google Translate (built-in free web client fallback — zero setup required!)
+  - Google Translate (built-in free web client fallback â€” zero setup required!)
 
 Persistent SQLite Cache (translations.db):
   Instant translation responses for previously translated text.
@@ -86,7 +86,7 @@ def load_config(path):
         print(f"[config] No config file found at '{path}', using defaults.")
         return dict(DEFAULT_CONFIG)
     if tomllib is None:
-        print("[config] tomllib/tomli not installed — using defaults.")
+        print("[config] tomllib/tomli not installed â€” using defaults.")
         return dict(DEFAULT_CONFIG)
     try:
         with open(path, "rb") as f:
@@ -367,7 +367,60 @@ def _call_google(text, from_lang, to_lang, backend):
         raise ValueError("Google Translate returned empty text")
     return result
 
+def _call_gemini(text, from_lang, to_lang, backend):
+    """Google AI Studio (Gemini) API Backend."""
+    api_key = backend.get("api_key", "").strip()
+    if api_key.startswith("env:"):
+        api_key = os.environ.get(api_key[4:], "").strip()
+    if not api_key:
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key or api_key.startswith("YOUR_") or api_key == "AIzaSy...":
+        raise ValueError("Gemini api_key not configured (please paste your Google AI Studio key in config.toml)")
+
+    model = backend.get("model", "gemini-2.0-flash")
+    timeout = backend.get("timeout", 10)
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    system_prompt = (
+        "You are an expert translator for World of Warcraft Classic.\n"
+        "Translate chat accurately, preserving MMO terms (LFG, DPS, MT, OT, CC, etc.) and placeholders (http://ph.wt/1).\n"
+        "Output ONLY the translated text without quotes, markdown formatting, or preamble."
+    )
+    payload = json.dumps({
+        "contents": [
+            {
+                "parts": [
+                    {"text": f"{system_prompt}\n\nTranslate from {from_lang} to {to_lang}: {text}"}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 256,
+        }
+    }).encode("utf-8")
+    
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json", "User-Agent": "WoWTranslateProxy/3.5"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    
+    candidates = data.get("candidates", [])
+    if not candidates:
+        raise ValueError("Gemini returned no candidates")
+    parts = candidates[0].get("content", {}).get("parts", [])
+    if not parts:
+        raise ValueError("Gemini returned no content parts")
+    return parts[0].get("text", "").strip()
+
 BACKEND_FNS = {
+    "gemini": _call_gemini,
+    "google_ai": _call_gemini,
+    "google_studio": _call_gemini,
     "ollama": _call_ollama,
     "deepl": _call_deepl,
     "openai": _call_openai,
@@ -390,7 +443,7 @@ def translate(text, from_lang, to_lang, backends):
             if result:
                 # Clean up apostrophe space artifact e.g. "doesn' t" -> "doesn't"
                 result = re.sub(r"'%s+(\w)", r"'\1", result)
-                print(f"[translate] [{btype}] {from_lang}→{to_lang}: '{text[:40]}' → '{result[:40]}'")
+                print(f"[translate] [{btype}] {from_lang}â†’{to_lang}: '{text[:40]}' â†’ '{result[:40]}'")
                 return result, None
         except Exception as e:
             last_err = f"{btype}: {e}"
@@ -404,7 +457,7 @@ def translate(text, from_lang, to_lang, backends):
             print("[translate] Attempting automatic Google fallback...")
             res = _call_google(text, from_lang, to_lang, {"timeout": 8})
             if res:
-                print(f"[translate] [google-fallback] {from_lang}→{to_lang}: '{text[:40]}' → '{res[:40]}'")
+                print(f"[translate] [google-fallback] {from_lang}â†’{to_lang}: '{text[:40]}' â†’ '{res[:40]}'")
                 return res, None
         except Exception as e:
             last_err = f"google-fallback: {e}"
@@ -714,7 +767,7 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                 if cached:
                     _write_ipc_result(req_id, "ok", cached, ipc_targets)
                     _safe_delete(req_path)
-                    print(f"[proxy] [cache-hit] {from_lang}→{to_lang}: '{text[:40]}'")
+                    print(f"[proxy] [cache-hit] {from_lang}â†’{to_lang}: '{text[:40]}'")
                     continue
 
                 in_flight.add(req_id)
