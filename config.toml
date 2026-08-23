@@ -16,7 +16,7 @@ scan_interval = 0.05
 [[backends]]
 type = "gemini"
 api_key = "YOUR_GEMINI_API_KEY_HERE"
-model = "gemini-2.0-flash"
+model = "gemini-2.5-flash"
 timeout = 10
 
 # Backend 2: OpenAI / ChatGPT (Cloud LLM)
