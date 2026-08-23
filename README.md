@@ -9,17 +9,37 @@ WoWTranslate runs **100% locally and offline on your computer** using **Ollama**
 
 ## ⚡ Super Easy Setup (Ollama Local AI)
 
-Follow these 3 simple steps to get it running. No programming knowledge required!
+Follow these simple steps to get it running. No programming knowledge required!
 
 ---
 
-### 🟢 STEP 1: Download & Install Ollama
+### 🟢 STEP 1: Install Python (Required to run the proxy)
+*(If you already have Python on your PC, you can skip to Step 2!)*
+
+Choose **either** Method A (PowerShell) or Method B (Installer):
+
+#### Method A: 1-Click Install via PowerShell (Automatically adds to PATH)
+1. Right-click your Windows **Start menu button** and click **"Terminal"** or **"Windows PowerShell"**.
+2. Copy and paste this command, then press **Enter**:
+   ```powershell
+   winget install Python.Python.3.12
+   ```
+
+#### Method B: Standard Python Installer (python.org)
+1. Go to **[https://www.python.org/downloads/](https://www.python.org/downloads/)** and download Python for Windows.
+2. Run the downloaded installer.
+3. ⚠️ **CRITICAL STEP:** At the bottom of the installer window, **CHECK THE BOX**:
+   > **`☑ Add python.exe to PATH`**  *(Do not forget this!)*
+4. Click **Install Now**.
+
+---
+
+### 🟢 STEP 2: Download & Install Ollama
 
 Choose **either** Method A (PowerShell) or Method B (Browser):
 
 #### Method A: 1-Click Install via PowerShell (Fastest)
-1. Right-click your Windows **Start menu button** and click **"Terminal"** or **"Windows PowerShell"**.
-2. Copy and paste this command, then press **Enter**:
+1. In your **PowerShell** window, paste this command and press **Enter**:
    ```powershell
    winget install Ollama.Ollama
    ```
@@ -37,7 +57,7 @@ Choose **either** Method A (PowerShell) or Method B (Browser):
 
 ---
 
-### 🟢 STEP 2: Download the Free AI Translation Model (Using CMD / PowerShell)
+### 🟢 STEP 3: Download the Free AI Translation Model (Using CMD / PowerShell)
 
 To download the AI translation brain onto your computer, run a single command in **Command Prompt (CMD)** or **PowerShell**:
 
@@ -70,7 +90,7 @@ To download the AI translation brain onto your computer, run a single command in
 
 ---
 
-### 🟢 STEP 3: Start the Translator & Play WoW!
+### 🟢 STEP 4: Start the Translator & Play WoW!
 
 1. Open your World of Warcraft folder:
    ```text
@@ -175,3 +195,10 @@ timeout = 8
 #### 4. How fast is it?
 - Translations for previously seen messages and player names load in **0.05 milliseconds** from your local SQLite cache (`translations.db`).
 - Brand new messages translated by your local Ollama model take between **50ms to 200ms**.
+
+#### 5. How do I fix "Python is not found" or "Python not in PATH"?
+If `start_proxy.bat` says Python was not found:
+1. Re-run the Python installer from **[python.org/downloads](https://www.python.org/downloads/)**.
+2. Click **Modify** (or uninstall and reinstall).
+3. ⚠️ **Make sure to check the box:** **`☑ Add python.exe to PATH`** at the bottom of the installer!
+4. *(Or simply open PowerShell and run: `winget install Python.Python.3.12` which sets up PATH automatically).*
