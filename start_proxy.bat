@@ -4,7 +4,8 @@ cd /d "%~dp0"
 echo ===================================================
 echo   Starting WoWTranslate Proxy...
 echo ===================================================
-python wow_proxy.py
+set PYTHONUNBUFFERED=1
+python -u wow_proxy.py
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo Python not found in PATH or exited with error.
