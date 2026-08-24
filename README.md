@@ -1,4 +1,4 @@
-# 🌐 WoWTranslate v3.5.3 — Universal Real-Time Chat Translator
+# 🌐 WoWTranslate v3.5.4 — Universal Real-Time Chat Translator
 ### World of Warcraft 1.12.1 (Vanilla / Turtle WoW)
 
 [![Latest Release](https://img.shields.io/github/v/release/prodigeomix/WoWTranslate?color=blue&label=Latest%20Release)](https://github.com/prodigeomix/WoWTranslate/releases/latest)
@@ -86,7 +86,7 @@ To download the AI translation brain onto your computer, run a single command in
    - Wait for the download progress to reach `100%` and say **`success`**.
 
 > ⚠️ **IMPORTANT RULE IF YOU CHOOSE A DIFFERENT MODEL:**
-> If you pull a specific model tag (e.g. `qwen2.5:1.5b`, `qwen2.5:3b`, or `qwen2.5:7b`), you **must** open [`config.toml`](file:///c:/Games/Interface/AddOns/WoWTranslate/config.toml) and match the exact name:
+> If you pull a specific model tag (e.g. `qwen2.5:1.5b`, `qwen2.5:3b`, or `qwen2.5:7b`), you **must** open [`config.toml`](config.toml) and match the exact name:
 > ```toml
 > model = "qwen2.5:1.5b"
 > ```
@@ -104,11 +104,9 @@ To download the AI translation brain onto your computer, run a single command in
 3. A small black window will open and say:
    ```text
    ==========================================================
-     WoWTranslate Universal Proxy v3.5.3
+     WoWTranslate Universal Proxy v3.5.4
      Backends     : ['ollama', 'google']
    ==========================================================
-   [proxy] Ready! Proxy is actively listening for translations.
-   ```
    [proxy] Ready! Proxy is actively listening for translations.
    ```
 4. **Leave this window open (minimized) while you play WoW.**

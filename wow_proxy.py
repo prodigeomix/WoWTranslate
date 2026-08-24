@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5.3  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5.4  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -50,7 +50,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-VERSION = "3.5.3"
+VERSION = "3.5.4"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
@@ -262,11 +262,12 @@ def _call_ollama(text, from_lang, to_lang, backend):
     tgt_lang = lang_map.get(to_lang.lower(), to_lang)
 
     system_prompt = (
-        f"You are a professional World of Warcraft chat translator.\n"
-        f"Translate accurately and concisely from {src_lang} to {tgt_lang}.\n"
-        f"Preserve gamer slang, abbreviations (LFG, LFM, DPS, MT, OT, CC, WTS, WTB), player names, item links, coords, numbers, and URL placeholders (http://ph.wt/1).\n"
-        f"For short phrases or single words, translate directly and concisely without adding commentary or imaginary channel tags.\n"
-        f"Return ONLY the translated text without explanations, quotes, or markdown."
+        f"You are a specialized real-time translator for World of Warcraft Classic.\n"
+        f"Translate accurately from {src_lang} to {tgt_lang} using natural MMORPG terminology.\n\n"
+        f"Rules:\n"
+        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., 'plsease' -> please, '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts).\n"
+        f"2. Preservation: Keep player names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP) intact.\n"
+        f"3. Output Format: Return ONLY the raw translated text. No explanations, quotes, markdown, conversational commentary, or channel prefixes."
     )
 
     model = backend.get("model", "qwen2.5")
@@ -385,9 +386,12 @@ def _call_openai(text, from_lang, to_lang, backend):
     model = backend.get("model", "gpt-4o-mini")
     timeout = backend.get("timeout", 10)
     system = (
-        "You are an expert translator for World of Warcraft Classic.\n"
-        "Translate chat accurately, preserving MMO terms (LFG, DPS, MT, OT, CC, etc.) and placeholders (http://ph.wt/1).\n"
-        "Output ONLY the translated text without quotes or preamble."
+        f"You are a specialized real-time translator for World of Warcraft Classic.\n"
+        f"Translate accurately from {from_lang} to {to_lang} using natural MMORPG terminology.\n\n"
+        f"Rules:\n"
+        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., 'plsease' -> please, '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts).\n"
+        f"2. Preservation: Keep player names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP) intact.\n"
+        f"3. Output Format: Return ONLY the raw translated text without quotes, markdown, explanations, or channel prefixes."
     )
     payload = json.dumps({
         "model": model,
@@ -483,9 +487,12 @@ def _call_gemini(text, from_lang, to_lang, backend):
     timeout = backend.get("timeout", 10)
     
     system_prompt = (
-        "You are an expert translator for World of Warcraft Classic.\n"
-        "Translate chat accurately, preserving MMO terms (LFG, DPS, MT, OT, CC, etc.) and placeholders (http://ph.wt/1).\n"
-        "Output ONLY the translated plain text without quotes, markdown bolding, explanations, or preamble."
+        f"You are a specialized real-time translator for World of Warcraft Classic.\n"
+        f"Translate accurately from {from_lang} to {to_lang} using natural MMORPG terminology.\n\n"
+        f"Rules:\n"
+        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., 'plsease' -> please, '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts).\n"
+        f"2. Preservation: Keep player names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP) intact.\n"
+        f"3. Output Format: Return ONLY the raw translated plain text without quotes, markdown bolding, explanations, commentary, or channel prefixes."
     )
     payload = json.dumps({
         "contents": [
@@ -568,7 +575,10 @@ def translate(text, from_lang, to_lang, backends):
             if result:
                 # Clean up apostrophe space artifact e.g. "doesn' t" -> "doesn't"
                 result = re.sub(r"'%s+(\w)", r"'\1", result)
-                print(f"[translate] [{btype}] {from_lang} -> {to_lang}: '{text[:40]}' -> '{result[:40]}'")
+                # Formatted log with clean length limit
+                t_disp = (text[:50] + "...") if len(text) > 50 else text
+                r_disp = (result[:50] + "...") if len(result) > 50 else result
+                print(f"[translate] [{btype}] {from_lang} -> {to_lang}: '{t_disp}' -> '{r_disp}'")
                 return result, None
         except Exception as e:
             last_err = f"{btype}: {e}"
