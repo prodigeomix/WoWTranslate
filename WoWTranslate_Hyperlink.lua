@@ -568,42 +568,50 @@ itemCacheFrame:SetScript("OnUpdate", function()
     -- (or WT_CheckItemCache) doesn't kill this OnUpdate permanently.  An
     -- unhandled throw would leave the entry in the queue forever and the
     -- message would never be shown to the user.
-    for cacheId, queued in pairs(WT_itemCacheQueue) do
-        local ok, err = pcall(function()
-            local allCached = WT_CheckItemCache(queued.itemIds, false)  -- Just check, don't trigger
-            local elapsed = GetTime() - queued.timestamp
+    local queuedIds = {}
+    for cacheId, _ in pairs(WT_itemCacheQueue) do
+        table.insert(queuedIds, cacheId)
+    end
 
-            if allCached then
-                WT_DebugLog("Items cached, processing message:", cacheId)
-                WT_itemCacheQueue[cacheId] = nil
-                WT_ProcessItemCacheMessage(queued)
-            elseif elapsed > ITEM_CACHE_MAX_WAIT then
-                -- Timeout - process anyway with whatever we have
-                local _, stillUncached = WT_CheckItemCache(queued.itemIds, false)
-                WT_DebugLog("Item cache timeout after", elapsed, "sec, uncached:", table.getn(stillUncached))
-                for _, uid in ipairs(stillUncached) do
-                    WT_DebugLog("  Still uncached item ID:", uid)
-                end
-                WT_itemCacheQueue[cacheId] = nil
-                WT_ProcessItemCacheMessage(queued)
-            else
-                -- Retry triggering cache periodically for stubborn items
-                if not queued.lastRetry or (GetTime() - queued.lastRetry) > ITEM_CACHE_RETRY_INTERVAL then
-                    queued.lastRetry = GetTime()
-                    queued.retries = (queued.retries or 0) + 1
-                    if queued.retries <= 5 then  -- Max 5 retries
-                        local _, stillUncached = WT_CheckItemCache(queued.itemIds, true)  -- Trigger cache again
-                        if table.getn(stillUncached) > 0 then
-                            WT_DebugLog("Retry", queued.retries, "- triggering cache for", table.getn(stillUncached), "items")
+    for _, cacheId in ipairs(queuedIds) do
+        local queued = WT_itemCacheQueue[cacheId]
+        if queued then
+            local ok, err = pcall(function()
+                local allCached = WT_CheckItemCache(queued.itemIds, false)  -- Just check, don't trigger
+                local elapsed = GetTime() - queued.timestamp
+
+                if allCached then
+                    WT_DebugLog("Items cached, processing message:", cacheId)
+                    WT_itemCacheQueue[cacheId] = nil
+                    WT_ProcessItemCacheMessage(queued)
+                elseif elapsed > ITEM_CACHE_MAX_WAIT then
+                    -- Timeout - process anyway with whatever we have
+                    local _, stillUncached = WT_CheckItemCache(queued.itemIds, false)
+                    WT_DebugLog("Item cache timeout after", elapsed, "sec, uncached:", table.getn(stillUncached))
+                    for _, uid in ipairs(stillUncached) do
+                        WT_DebugLog("  Still uncached item ID:", uid)
+                    end
+                    WT_itemCacheQueue[cacheId] = nil
+                    WT_ProcessItemCacheMessage(queued)
+                else
+                    -- Retry triggering cache periodically for stubborn items
+                    if not queued.lastRetry or (GetTime() - queued.lastRetry) > ITEM_CACHE_RETRY_INTERVAL then
+                        queued.lastRetry = GetTime()
+                        queued.retries = (queued.retries or 0) + 1
+                        if queued.retries <= 5 then  -- Max 5 retries
+                            local _, stillUncached = WT_CheckItemCache(queued.itemIds, true)  -- Trigger cache again
+                            if table.getn(stillUncached) > 0 then
+                                WT_DebugLog("Retry", queued.retries, "- triggering cache for", table.getn(stillUncached), "items")
+                            end
                         end
                     end
                 end
+            end)
+            if not ok then
+                WT_DebugLog("itemCacheFrame OnUpdate error for", cacheId, ":", tostring(err))
+                -- Drop the broken entry so we don't loop on it forever.
+                WT_itemCacheQueue[cacheId] = nil
             end
-        end)
-        if not ok then
-            WT_DebugLog("itemCacheFrame OnUpdate error for", cacheId, ":", tostring(err))
-            -- Drop the broken entry so we don't loop on it forever.
-            WT_itemCacheQueue[cacheId] = nil
         end
     end
 end)

@@ -1,5 +1,5 @@
 -- WoWTranslate_API.lua
--- Universal Multi-Transport API for WoWTranslate (v3.5.2)
+-- Universal Multi-Transport API for WoWTranslate (v3.5.3)
 -- Supports SuperWoW (Imports\req_*.txt), Standard Lua IO (WoWTranslate\IPC\), and UnitXP C++ DLL.
 --
 -- Transports:
@@ -540,55 +540,71 @@ local function PollUnitXP()
 end
 
 local function PollFileIPC()
+    local completed = {}
     for reqId, req in pairs(pendingRequests) do
         local content = ReadResult(reqId)
         if content and content ~= "" and content ~= false then
-            ClearRequest(reqId)
-
-            pendingRequests[reqId] = nil
-            if req.text then pendingTexts[req.text] = nil end
-            OnRequestCompleted()
-
-            local firstPipe = string.find(content, "|", 1, true)
-            local status = firstPipe and string.sub(content, 1, firstPipe - 1) or "err"
-            local body   = firstPipe and string.sub(content, firstPipe + 1) or content
-
-            if status == "ok" then
-                consecutiveErrors = 0
-                rateLimitBackoff = 5
-                body = string.gsub(body, "'%s+(%a)", "'%1")
-                FireCallbacks(req, body, nil)
-            else
-                consecutiveErrors = consecutiveErrors + 1
-                if consecutiveErrors >= BACKOFF_TRIGGER then
-                    rateLimitedUntil = GetTime() + rateLimitBackoff
-                    rateLimitBackoff = math.min(rateLimitBackoff * 2, BACKOFF_CAP)
-                    consecutiveErrors = 0
-                end
-                FireCallbacks(req, nil, body)
-            end
+            table.insert(completed, { reqId = reqId, req = req, content = content })
         end
     end
-end
 
-local function ProcessTimeouts()
-    local now = GetTime()
-    for reqId, req in pairs(pendingRequests) do
-        if now - req.timestamp > REQUEST_TIMEOUT then
-            ClearRequest(reqId)
-            pendingRequests[reqId] = nil
-            if req.text then pendingTexts[req.text] = nil end
-            OnRequestCompleted()
+    for _, item in ipairs(completed) do
+        local reqId = item.reqId
+        local req = item.req
+        local content = item.content
 
+        ClearRequest(reqId)
+
+        pendingRequests[reqId] = nil
+        if req.text then pendingTexts[req.text] = nil end
+        OnRequestCompleted()
+
+        local firstPipe = string.find(content, "|", 1, true)
+        local status = firstPipe and string.sub(content, 1, firstPipe - 1) or "err"
+        local body   = firstPipe and string.sub(content, firstPipe + 1) or content
+
+        if status == "ok" then
+            consecutiveErrors = 0
+            rateLimitBackoff = 5
+            body = string.gsub(body, "'%s+(%a)", "'%1")
+            FireCallbacks(req, body, nil)
+        else
             consecutiveErrors = consecutiveErrors + 1
             if consecutiveErrors >= BACKOFF_TRIGGER then
                 rateLimitedUntil = GetTime() + rateLimitBackoff
                 rateLimitBackoff = math.min(rateLimitBackoff * 2, BACKOFF_CAP)
                 consecutiveErrors = 0
             end
-
-            FireCallbacks(req, nil, "timeout")
+            FireCallbacks(req, nil, body)
         end
+    end
+end
+
+local function ProcessTimeouts()
+    local now = GetTime()
+    local timedOut = {}
+    for reqId, req in pairs(pendingRequests) do
+        if now - req.timestamp > REQUEST_TIMEOUT then
+            table.insert(timedOut, { reqId = reqId, req = req })
+        end
+    end
+
+    for _, item in ipairs(timedOut) do
+        local reqId = item.reqId
+        local req = item.req
+        ClearRequest(reqId)
+        pendingRequests[reqId] = nil
+        if req.text then pendingTexts[req.text] = nil end
+        OnRequestCompleted()
+
+        consecutiveErrors = consecutiveErrors + 1
+        if consecutiveErrors >= BACKOFF_TRIGGER then
+            rateLimitedUntil = GetTime() + rateLimitBackoff
+            rateLimitBackoff = math.min(rateLimitBackoff * 2, BACKOFF_CAP)
+            consecutiveErrors = 0
+        end
+
+        FireCallbacks(req, nil, "timeout")
     end
 end
 
@@ -665,7 +681,11 @@ function WoWTranslate_API.GetLastCallbackError()
 end
 
 function WoWTranslate_API.ClearPending()
-    for reqId, req in pairs(pendingRequests) do
+    local reqIds = {}
+    for reqId, _ in pairs(pendingRequests) do
+        table.insert(reqIds, reqId)
+    end
+    for _, reqId in ipairs(reqIds) do
         ClearRequest(reqId)
     end
     pendingRequests    = {}

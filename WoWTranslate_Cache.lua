@@ -94,16 +94,19 @@ function WoWTranslate_CacheMaybeEvict()
     if toEvict <= 0 then return end
     
     local threshold = timestamps[toEvict]
-    local evictedCount = 0
+    local keysToEvict = {}
 
     for key, _ in pairs(WoWTranslateCache) do
         local ts = WoWTranslateCacheOrder[key] or 0
         if ts <= threshold then
-            WoWTranslateCache[key] = nil
-            WoWTranslateCacheOrder[key] = nil
-            evictedCount = evictedCount + 1
-            if evictedCount >= toEvict then break end
+            table.insert(keysToEvict, key)
+            if table.getn(keysToEvict) >= toEvict then break end
         end
+    end
+
+    for _, key in ipairs(keysToEvict) do
+        WoWTranslateCache[key] = nil
+        WoWTranslateCacheOrder[key] = nil
     end
 end
 

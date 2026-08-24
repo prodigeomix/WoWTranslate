@@ -726,7 +726,11 @@ function WT_HookChatFrames(force)
                                         if wimWhisperUser and type(WIM_PostMessage) == "function" then
                                             WIM_PostMessage(wimWhisperUser, wtMsg, 3)
                                         elseif targets then
+                                            local targetList = {}
                                             for targetFrame in pairs(targets) do
+                                                table.insert(targetList, targetFrame)
+                                            end
+                                            for _, targetFrame in ipairs(targetList) do
                                                 targetFrame:AddMessage(wtMsg)
                                             end
                                         else
@@ -785,12 +789,18 @@ end
 
 function WT_CleanupPendingMessages()
     local now = GetTime()
+    local timedOut = {}
     for msgId, pending in pairs(WT_pendingMessages) do
         if now - pending.timestamp > 30 then
-            WT_DebugLog("Message timed out:", msgId)
-            WT_SafeAddMessage(pending.WT_originalAddMessage, pending.frame, pending.originalText, pending.r, pending.g, pending.b, pending.id, pending.holdTime)
-            WT_pendingMessages[msgId] = nil
+            table.insert(timedOut, { msgId = msgId, pending = pending })
         end
+    end
+    for _, item in ipairs(timedOut) do
+        local msgId = item.msgId
+        local pending = item.pending
+        WT_DebugLog("Message timed out:", msgId)
+        WT_pendingMessages[msgId] = nil
+        WT_SafeAddMessage(pending.WT_originalAddMessage, pending.frame, pending.originalText, pending.r, pending.g, pending.b, pending.id, pending.holdTime)
     end
 end
 
@@ -819,15 +829,21 @@ end
 -- Clean up queued outgoing messages after timeout
 function WT_CleanupOutgoingQueue()
     local now = GetTime()
+    local timedOut = {}
     for queueId, item in pairs(WT_outgoingQueue) do
         if now - item.timestamp > 30 then
-            WT_DebugLog("Outgoing message timed out:", queueId)
-            if WT_originalAddMessage then
-                WT_SafeAddMessage(WT_originalAddMessage, DEFAULT_CHAT_FRAME, "|cFFFF0000[WoWTranslate] Translation timed out, sending original|r")
-            end
-            WT_SafeSendChatMessage(item.originalMsg, item.chatType, item.language, item.channel)
-            WT_outgoingQueue[queueId] = nil
+            table.insert(timedOut, { queueId = queueId, item = item })
         end
+    end
+    for _, entry in ipairs(timedOut) do
+        local queueId = entry.queueId
+        local item = entry.item
+        WT_DebugLog("Outgoing message timed out:", queueId)
+        WT_outgoingQueue[queueId] = nil
+        if WT_originalAddMessage then
+            WT_SafeAddMessage(WT_originalAddMessage, DEFAULT_CHAT_FRAME, "|cFFFF0000[WoWTranslate] Translation timed out, sending original|r")
+        end
+        WT_SafeSendChatMessage(item.originalMsg, item.chatType, item.language, item.channel)
     end
 end
 
