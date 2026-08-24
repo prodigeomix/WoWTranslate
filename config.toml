@@ -14,8 +14,12 @@ scan_interval = 0.05
 # 1. Ollama (100% Local & Offline LLM - Zero API Cost)
 # Setup:
 #   1. Download and run Ollama from https://ollama.com
-#   2. In your terminal, run: ollama pull qwen2.5
-#      (Recommended models: qwen2.5, qwen2.5:7b, qwen2.5:3b, llama3.2)
+#   2. In your terminal, run ONE of the following:
+#        ollama pull qwen2.5        (Default - standard gaming PCs)
+#        ollama pull qwen2.5:1.5b   (Recommended for speed / laptops)
+#        ollama pull qwen2.5:3b     (Balanced speed & quality)
+#        ollama pull qwen2.5:7b     (High accuracy - 8GB+ GPU VRAM)
+#   3. Make sure the 'model' line below matches the exact name from 'ollama list':
 [[backends]]
 type = "ollama"
 url = "http://localhost:11434"
