@@ -1,6 +1,10 @@
 # 🌐 WoWTranslate v3.5.1 — Universal Real-Time Chat Translator
 ### World of Warcraft 1.12.1 (Vanilla / Turtle WoW)
 
+[![Latest Release](https://img.shields.io/github/v/release/prodigeomix/WoWTranslate?color=blue&label=Latest%20Release)](https://github.com/prodigeomix/WoWTranslate/releases/latest)
+[![Total Downloads](https://img.shields.io/github/downloads/prodigeomix/WoWTranslate/total?color=brightgreen&label=Downloads)](https://github.com/prodigeomix/WoWTranslate/releases)
+[![License](https://img.shields.io/github/license/prodigeomix/WoWTranslate?color=orange)](LICENSE)
+
 Translate World of Warcraft chat in real-time between **Chinese, English, Russian, Japanese, and Korean** directly inside your game!
 
 WoWTranslate runs **100% locally and offline on your computer** using **Ollama** (your own private AI model). It is completely free, private, has zero monthly limits, and translates chat in **under 50 milliseconds**.

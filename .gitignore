@@ -8,7 +8,9 @@ __pycache__/
 *.db-journal
 translations.db
 IPC/requests/*
+!IPC/requests/.gitkeep
 IPC/results/*
+!IPC/results/.gitkeep
 IPC/ping
 IPC/pong
 IPC/proxy_ready
