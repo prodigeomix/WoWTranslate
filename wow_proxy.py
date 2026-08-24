@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5  â€”  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5.1  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -21,7 +21,7 @@ Translation Backends (ordered priority with automatic fallback):
   - Ollama (local offline LLM, e.g. qwen2.5)
   - DeepL (Free or Pro API key)
   - OpenAI (gpt-4o-mini / compatible endpoints)
-  - Google Translate (built-in free web client fallback â€” zero setup required!)
+  - Google Translate (built-in free web client fallback -- zero setup required!)
 
 Persistent SQLite Cache (translations.db):
   Instant translation responses for previously translated text.
@@ -49,6 +49,9 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
+
+VERSION = "3.5.1"
+USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
 # Configuration Loader
@@ -86,7 +89,7 @@ def load_config(path):
         print(f"[config] No config file found at '{path}', using defaults.")
         return dict(DEFAULT_CONFIG)
     if tomllib is None:
-        print("[config] tomllib/tomli not installed â€” using defaults.")
+        print("[config] tomllib/tomli not installed -- using defaults.")
         return dict(DEFAULT_CONFIG)
     try:
         with open(path, "rb") as f:
@@ -223,7 +226,7 @@ def _is_ollama_online(url="http://localhost:11434/api/tags"):
     if _ollama_online is not None and (now - _ollama_last_check) < 15:
         return _ollama_online
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "WoWTranslateProxy/3.5"})
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=1.5) as resp:
             _ollama_online = (resp.status == 200)
     except Exception:
@@ -233,16 +236,13 @@ def _is_ollama_online(url="http://localhost:11434/api/tags"):
 
 def _call_ollama(text, from_lang, to_lang, backend):
     raw_url = backend.get("url", "http://localhost:11434").rstrip("/")
-    if raw_url.endswith("/api/generate"):
-        base_url = raw_url[:-len("/api/generate")].rstrip("/")
-        gen_url = raw_url
-    elif raw_url.endswith("/api/chat"):
-        base_url = raw_url[:-len("/api/chat")].rstrip("/")
-        gen_url = raw_url
+    if raw_url.endswith("/api/generate") or raw_url.endswith("/api/chat"):
+        base_url = re.sub(r"/api/(?:generate|chat)$", "", raw_url).rstrip("/")
     else:
         base_url = raw_url
-        gen_url = f"{base_url}/api/generate"
     tags_url = f"{base_url}/api/tags"
+    chat_url = f"{base_url}/api/chat"
+    gen_url = f"{base_url}/api/generate"
 
     if not _is_ollama_online(tags_url):
         raise ConnectionRefusedError(f"Ollama is not responding at {base_url} (ensure 'ollama serve' or Ollama desktop app is running)")
@@ -262,13 +262,12 @@ def _call_ollama(text, from_lang, to_lang, backend):
     tgt_lang = lang_map.get(to_lang.lower(), to_lang)
 
     system_prompt = (
-        "You are a professional World of Warcraft chat translator.\n"
-        "Translate the text accurately and concisely from {src} to {tgt}.\n"
-        "Preserve gamer slang, abbreviations (LFG, LFM, DPS, MT, OT, CC, WTS, WTB), player names, item links, coords, numbers, and URL placeholders (http://ph.wt/1).\n"
-        "Return ONLY the translated text without explanations, quotes, or markdown."
-    ).replace("{src}", src_lang).replace("{tgt}", tgt_lang)
-
-    prompt = f"{system_prompt}\n\nChat: {text}\nTranslation:"
+        f"You are a professional World of Warcraft chat translator.\n"
+        f"Translate accurately and concisely from {src_lang} to {tgt_lang}.\n"
+        f"Preserve gamer slang, abbreviations (LFG, LFM, DPS, MT, OT, CC, WTS, WTB), player names, item links, coords, numbers, and URL placeholders (http://ph.wt/1).\n"
+        f"For short phrases or single words, translate directly and concisely without adding commentary or imaginary channel tags.\n"
+        f"Return ONLY the translated text without explanations, quotes, or markdown."
+    )
 
     model = backend.get("model", "qwen2.5")
     timeout = backend.get("timeout", 20)
@@ -276,26 +275,56 @@ def _call_ollama(text, from_lang, to_lang, backend):
     temperature = backend.get("temperature", 0.0)
     num_predict = backend.get("num_predict", 128)
 
-    payload = json.dumps({
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "keep_alive": keep_alive,
-        "options": {
-            "temperature": temperature,
-            "num_predict": num_predict,
-            "stop": ["\n\n", "Chat:", "Translation:", "Message:", "User:"],
-        },
-    }).encode("utf-8")
+    result = ""
+    # 1. Primary: Native Ollama /api/chat endpoint (Structured system & user roles)
+    try:
+        chat_payload = json.dumps({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
+            ],
+            "stream": False,
+            "keep_alive": keep_alive,
+            "options": {
+                "temperature": temperature,
+                "num_predict": num_predict,
+            },
+        }).encode("utf-8")
 
-    req = urllib.request.Request(
-        gen_url, data=payload,
-        headers={"Content-Type": "application/json", "User-Agent": "WoWTranslateProxy/3.5"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    result = data.get("response", "").strip()
+        req = urllib.request.Request(
+            chat_url, data=chat_payload,
+            headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        result = data.get("message", {}).get("content", "").strip()
+    except Exception:
+        result = ""
+
+    # 2. Fallback: /api/generate if /api/chat returned empty or was unavailable
+    if not result:
+        prompt = f"{system_prompt}\n\nChat: {text}\nTranslation:"
+        gen_payload = json.dumps({
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": keep_alive,
+            "options": {
+                "temperature": temperature,
+                "num_predict": num_predict,
+            },
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            gen_url, data=gen_payload,
+            headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        result = data.get("response", "").strip()
 
     # Post-process: strip <think>...</think> tags if model is reasoning-based (e.g. DeepSeek-R1)
     result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
@@ -332,7 +361,7 @@ def _call_deepl(text, from_lang, to_lang, backend):
     
     req = urllib.request.Request(
         endpoint, data=params,
-        headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "WoWTranslateProxy/3.5"},
+        headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": USER_AGENT},
         method="POST",
     )
     timeout = backend.get("timeout", 15)
@@ -372,7 +401,7 @@ def _call_openai(text, from_lang, to_lang, backend):
     req = urllib.request.Request(
         f"{base_url}/chat/completions",
         data=payload,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}", "User-Agent": "WoWTranslateProxy/3.5"},
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}", "User-Agent": USER_AGENT},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -485,7 +514,7 @@ def _call_gemini(text, from_lang, to_lang, backend):
         req = urllib.request.Request(
             url,
             data=payload,
-            headers={"Content-Type": "application/json", "User-Agent": "WoWTranslateProxy/3.5"},
+            headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
             method="POST",
         )
         try:
@@ -539,7 +568,7 @@ def translate(text, from_lang, to_lang, backends):
             if result:
                 # Clean up apostrophe space artifact e.g. "doesn' t" -> "doesn't"
                 result = re.sub(r"'%s+(\w)", r"'\1", result)
-                print(f"[translate] [{btype}] {from_lang}â†’{to_lang}: '{text[:40]}' â†’ '{result[:40]}'")
+                print(f"[translate] [{btype}] {from_lang} -> {to_lang}: '{text[:40]}' -> '{result[:40]}'")
                 return result, None
         except Exception as e:
             last_err = f"{btype}: {e}"
@@ -897,7 +926,7 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
 # Startup & Main
 # ---------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="WoWTranslate Universal Proxy v3.5")
+    parser = argparse.ArgumentParser(description=f"WoWTranslate Universal Proxy v{VERSION}")
     parser.add_argument("--config", default="config.toml", help="Path to config.toml")
     parser.add_argument("--wow-root", default=None, help="Override WoW root directory")
     args = parser.parse_args()
@@ -921,7 +950,7 @@ def main():
     http_port = cfg.get("http_port", 7654)
 
     print("==========================================================")
-    print("  WoWTranslate Universal Proxy v3.5")
+    print(f"  WoWTranslate Universal Proxy v{VERSION}")
     print(f"  WoW Root     : {wow_root}")
     print(f"  IPC Targets  : {ipc_targets}")
     print(f"  HTTP Port    : {http_port}")

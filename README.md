@@ -1,4 +1,4 @@
-# 🌐 WoWTranslate v3.5 — Universal Real-Time Chat Translator
+# 🌐 WoWTranslate v3.5.1 — Universal Real-Time Chat Translator
 ### World of Warcraft 1.12.1 (Vanilla / Turtle WoW)
 
 Translate World of Warcraft chat in real-time between **Chinese, English, Russian, Japanese, and Korean** directly inside your game!
@@ -100,7 +100,7 @@ To download the AI translation brain onto your computer, run a single command in
 3. A small black window will open and say:
    ```text
    ==========================================================
-     WoWTranslate Universal Proxy v3.5
+     WoWTranslate Universal Proxy v3.5.1
      Backends     : ['ollama', 'google']
    ==========================================================
    [proxy] Ready! Proxy is actively listening for translations.
