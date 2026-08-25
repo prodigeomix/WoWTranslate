@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5.6  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5.7  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -53,7 +53,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-VERSION = "3.5.6"
+VERSION = "3.5.7"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
@@ -816,7 +816,9 @@ def _worker(db_path, backends, ipc_targets):
             _job_queue.task_done()
 
 def _write_ipc_result(req_id, status, body, ipc_targets):
-    if status == "ok" and body:
+    # Pipe sanitization must apply on BOTH ok and err bodies: the wire format
+    # is "status|body", so an error message containing "|" would corrupt it.
+    if body:
         body = body.replace("|", "/")
     # Wire format is single-line "status|body": flatten any newlines/control
     # chars that a backend could return inside the translation.

@@ -385,7 +385,7 @@ function WoWTranslate_API.Translate(text, callback, fromLang)
     local reqId = "in_" .. tostring(requestCounter)
 
     local srcLang = fromLang or (WoWTranslateDB and WoWTranslateDB.incomingFromLang) or "zh"
-    local dstLang = (WoWTranslateDB and WoWTranslateDB.targetLang) or "en"
+    local dstLang = (WoWTranslateDB and WoWTranslateDB.incomingToLang) or "en"
 
     local reqData = {
         callbacks = callback and { callback } or {},

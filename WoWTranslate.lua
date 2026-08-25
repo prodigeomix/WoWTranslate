@@ -293,7 +293,7 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("[WoWTranslate] Requesting translation via " .. WoWTranslate_API.GetTransportName() .. "...")
         WoWTranslate_API.TranslateOutgoing(testText, function(result, err)
             if result then
-                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Translation:|r " .. result)
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Translation:|r " .. (WT_SanitizeDisplayText and WT_SanitizeDisplayText(result) or result))
             else
                 DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WoWTranslate] Error: " .. (err or "unknown") .. "|r")
             end

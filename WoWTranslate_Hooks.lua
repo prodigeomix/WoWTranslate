@@ -104,7 +104,7 @@ function WT_LFT_ApplyTranslation(entryId, isTitle, translated)
         if btn and btn:IsShown() and btn.data and btn.data.id == entryId then
             local suffix = isTitle and "Text" or "SubText"
             local widget = _G["LFTFrameGroupEntry"..i..suffix]
-            if widget then widget:SetText(translated) end
+            if widget then widget:SetText(WT_SanitizeDisplayText and WT_SanitizeDisplayText(translated) or translated) end
         end
     end
 end

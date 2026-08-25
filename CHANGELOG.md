@@ -4,6 +4,42 @@ All notable changes, fixes, and improvements to **WoWTranslate** are documented 
 
 ---
 
+## [v3.5.7] - 2026-08-25
+
+### 🔴 Security — Chat Injection Closure (audit waves 2–3)
+- **6th AddMessage Path Sanitized (LUA-12, HIGH)**: `WT_ProcessItemCacheMessage` now runs `WT_SanitizeDisplayText` on every display path (no-translatable-content, cache hit, API success, API-error fallback) — item-link messages can no longer carry backend-injected WoW escape sequences (`|c`, `|H...|h`, `|T`).
+- **Non-Chat Surfaces Sanitized (LUA-13, MED)**: Backend-derived text is stripped of escape sequences on tooltip guild/rank lines, chat sender-prefix name/guild, nameplate overlay names, right-click player name lookup, and `/wt testout` output.
+- **Error-Path Wire Sanitization (P2-01, LOW)**: Proxy IPC result pipe-replacement (`|` → `/`) now applies to error bodies too, not just successful translations, so an error message containing `|` cannot corrupt the single-line `status|body` wire format.
+
+### 🟠 Correctness
+- **Incoming Target Language Fixed (LUA-14, MED)**: Incoming requests read `incomingToLang` (the field the config UI actually writes) instead of the never-written `targetLang` — incoming target language was silently pinned to English regardless of settings.
+
+### 🟡 Audit Documentation
+- Full forensic audit reports for waves 1–4 added under `docs/`: security + correctness findings with file:line citations, fix verification, and wave logs. Both Python proxy and Lua loops closed CLEAN (proxy wave 3, Lua wave 4).
+- **LUA-18 Closure**: Sanitized the three remaining backend-derived display surfaces found in wave 3 — LFT widget text, tooltip/chat display names (`WT_MarkTranslatedDisplayName`), and nameplate guild lines (`WT_FormatNameplateGuildLine`).
+
+---
+
+## [v3.5.6] - 2026-08-25
+
+### 🔴 Security & Correctness Remediation (audit wave 1)
+
+**Lua addon side:**
+- **Chat Escape Injection Fix (LUA-01)**: New `WT_SanitizeDisplayText()` strips all WoW escape sequences from backend-derived text; applied at the 5 main `AddMessage` paths.
+- **Direction-Aware Cache (LUA-03)**: Translation cache keys now include language direction — no stale wrong-direction hits after switching languages.
+- **Pending-Key Collision Fix (LUA-04)**: Monotonic counter appended to replacement pending-keys.
+- **`/wt reset` Flush (LUA-10)**: ClearPending fires dropped callbacks with a "reset" error instead of leaving suppressed originals hidden.
+- Guild-name map capped at 500 entries (LUA-07); color channel rounding fixed (LUA-09); auto language mapping for LLM/DeepL backends (LUA-05).
+
+**Python proxy:**
+- **IPC Wire Sanitization (P-01)**: Newlines/control chars flattened before result writes; results written atomically (tmp + replace).
+- **In-Flight Protection (P-02)**: Scanner no longer deletes requests being processed by workers.
+- **Language-Code Validation (P-05/P-06)**: Intake regex validation plus URL parameter quoting on Google endpoints.
+- **Config-Fallback Warning (P-03)**: Loud warning when malformed config activates the external Google fallback.
+- Ollama health-probe lock (P-10); wow-root existence check before IPC directory creation (P-13).
+
+---
+
 ## [v3.5.5] - 2026-08-25
 
 ### 🔴 Critical Bug Fixes & Data-Corruption Prevention

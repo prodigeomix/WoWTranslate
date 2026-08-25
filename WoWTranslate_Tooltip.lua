@@ -96,6 +96,7 @@ function WT_MarkTranslatedDisplayName(rawName, displayName, unit)
     if not displayName or displayName == "" then return displayName end
     if not rawName or displayName == rawName then return displayName end
     local plain = WT_StripColorCodes(displayName)
+    plain = WT_SanitizeDisplayText and WT_SanitizeDisplayText(plain) or plain
     plain = WT_ApplyNameCapitalization(plain)
     local class = WT_ResolvePlayerClass(rawName, unit)
     if class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
@@ -111,9 +112,11 @@ function WT_BuildSenderPrefix(rawName, resolvedName, channel, guildDisplay)
     if not rawName or rawName == "" then return "" end
     local unit = WT_FindPlayerUnitByName(rawName)
     local resolved = resolvedName or rawName
+    if resolved then resolved = WT_SanitizeDisplayText and WT_SanitizeDisplayText(resolved) or resolved end
     local isTranslated = resolved ~= rawName
     local guildStr = ""
     if guildDisplay and guildDisplay ~= "" then
+        guildDisplay = WT_SanitizeDisplayText and WT_SanitizeDisplayText(guildDisplay) or ""
         guildStr = " <" .. guildDisplay .. "*>"
     end
     if channel then
@@ -655,6 +658,10 @@ function WT_UpdateTooltipPlayerNames(tooltip)
         end
 
         WT_ResolveGuildDisplayName(rawName, tooltipGuildText, function(guildDisplay, rankDisplay, rawGuild)
+            -- Backend-derived text must be stripped of WoW escape sequences
+            -- before it is embedded into tooltip lines.
+            if guildDisplay then guildDisplay = WT_SanitizeDisplayText and WT_SanitizeDisplayText(guildDisplay) or nil end
+            if rankDisplay then rankDisplay = WT_SanitizeDisplayText and WT_SanitizeDisplayText(rankDisplay) or nil end
             if not WT_TooltipIsShown(tooltip) then return end
             if tooltip.wtAddedNameLine then return end
 
@@ -970,7 +977,7 @@ function WT_UpdateNameplateFromPlate(plate)
                 local cached, found = WoWTranslate_CacheGet(WT_NameCacheKey(rawName))
                 local function applyNameDisplay(displayName)
                     if plate.wtRawName ~= rawName then return end
-                    local formatted = WT_FormatNameplateOverlayText(rawName, displayName)
+                    local formatted = WT_FormatNameplateOverlayText(rawName, displayName and WT_SanitizeDisplayText(displayName) or displayName)
                     if plate.wtLastDisplay ~= formatted then
                         WT_ApplyNameplateNameText(fs, formatted, plate, rawName, nil)
                         plate.wtLastDisplay = formatted
@@ -1106,6 +1113,7 @@ function WT_FormatNameplateGuildLine(rawGuild, displayGuild)
     displayGuild = displayGuild or rawGuild
     if not displayGuild or displayGuild == "" then return nil end
     local plain = WT_StripColorCodes(displayGuild) or displayGuild
+    plain = WT_SanitizeDisplayText and WT_SanitizeDisplayText(plain) or plain
     local line = "<" .. plain .. ">"
     if rawGuild and displayGuild ~= rawGuild then line = line .. "*" end
     return line
@@ -1321,7 +1329,7 @@ function WT_HookHyperlinkShow()
                     function(translation, err)
                         local frame = capturedFrame or DEFAULT_CHAT_FRAME
                         if translation and translation ~= "" and translation ~= playerName then
-                            frame:AddMessage("|cFF00CCFF[WT]|r: " .. playerName .. " = " .. translation)
+                            frame:AddMessage("|cFF00CCFF[WT]|r: " .. playerName .. " = " .. (WT_SanitizeDisplayText and WT_SanitizeDisplayText(translation) or translation))
                         elseif err then
                             frame:AddMessage("|cFFFFFF00[WT]: name lookup failed: " .. tostring(err) .. "|r")
                         end
