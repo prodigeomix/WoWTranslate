@@ -192,19 +192,14 @@ end
 -- ============================================================================
 function WT_HookGameTooltip()
     if not GameTooltip then return end
-    if GameTooltip.WoWTranslateOrigSetUnit then
-        GameTooltip.SetUnit = GameTooltip.WoWTranslateOrigSetUnit
-    end
-    if GameTooltip.WoWTranslateOrigSetHyperlink then
-        GameTooltip.SetHyperlink = GameTooltip.WoWTranslateOrigSetHyperlink
-    end
+    if GameTooltip.WoWTranslateTooltipHooked then return end
+    GameTooltip.WoWTranslateTooltipHooked = true
     if not GameTooltip.WoWTranslateOrigSetUnit then
         GameTooltip.WoWTranslateOrigSetUnit = GameTooltip.SetUnit
     end
     if GameTooltip.SetHyperlink and not GameTooltip.WoWTranslateOrigSetHyperlink then
         GameTooltip.WoWTranslateOrigSetHyperlink = GameTooltip.SetHyperlink
     end
-    GameTooltip.WoWTranslateTooltipHooked = true
     local origSetUnit = GameTooltip.WoWTranslateOrigSetUnit
     function GameTooltip:SetUnit(unit)
         WT_ClearTooltipNameHeader(GameTooltip)
@@ -269,13 +264,11 @@ end
 
 function WT_HookItemRefTooltip()
     if not ItemRefTooltip then return end
-    if ItemRefTooltip.WoWTranslateOrigSetHyperlink then
-        ItemRefTooltip.SetHyperlink = ItemRefTooltip.WoWTranslateOrigSetHyperlink
-    end
+    if ItemRefTooltip.WoWTranslateTooltipHooked then return end
+    ItemRefTooltip.WoWTranslateTooltipHooked = true
     if ItemRefTooltip.SetHyperlink and not ItemRefTooltip.WoWTranslateOrigSetHyperlink then
         ItemRefTooltip.WoWTranslateOrigSetHyperlink = ItemRefTooltip.SetHyperlink
     end
-    ItemRefTooltip.WoWTranslateTooltipHooked = true
     if ItemRefTooltip.WoWTranslateOrigSetHyperlink then
         local origSetHyperlink = ItemRefTooltip.WoWTranslateOrigSetHyperlink
         function ItemRefTooltip:SetHyperlink(link)

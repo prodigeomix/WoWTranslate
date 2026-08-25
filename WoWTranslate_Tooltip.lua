@@ -1013,6 +1013,8 @@ end
 -- ============================================================================
 
 
+-- In WoW 1.12.1 vanilla, nameplates lack unique unit IDs (e.g. nameplate1).
+-- This checks whether the player character is currently affecting combat.
 function WT_IsNameplateUnitInCombat(plate)
     if not UnitAffectingCombat then return true end
     local ok, c = pcall(UnitAffectingCombat, "player")
@@ -1103,7 +1105,7 @@ function WT_EnsureNameplateGuildFont(plate, nameFs)
     local parent = overlay or plate
     local anchor = (overlay and overlay.name and overlay.name.GetText and overlay.name) or nameFs
     if not anchor then return nil end
-    local fs = parent:CreateFontString("WoWTranslateNameplateGuild", "OVERLAY")
+    local fs = parent:CreateFontString(nil, "OVERLAY")
     if anchor.GetFont and fs.SetFont then
         local font, size, flags = anchor:GetFont()
         local small = (size and size > 8) and (size - 2) or 10

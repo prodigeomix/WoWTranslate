@@ -105,7 +105,7 @@ end)
 -- Title
 local title = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOP", configFrame, "TOP", 0, -20)
-title:SetText("WoWTranslate Configuration - v1.5")
+title:SetText("WoWTranslate Configuration - v3.5.5")
 
 -- Close button
 local closeBtn = CreateFrame("Button", nil, configFrame, "UIPanelCloseButton")

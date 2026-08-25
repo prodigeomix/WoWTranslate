@@ -66,6 +66,7 @@ jobs:
           cp -v start_proxy.bat build_stage/WoWTranslate/
           cp -v config.toml build_stage/WoWTranslate/
           cp -v README.md build_stage/WoWTranslate/
+          cp -v CHANGELOG.md build_stage/WoWTranslate/
           cp -v LICENSE build_stage/WoWTranslate/
 
           # Create distribution zip files

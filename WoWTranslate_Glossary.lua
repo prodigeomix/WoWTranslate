@@ -278,9 +278,8 @@ WoWTranslateGlossary["卡下"] = "Karazhan (lower)"
 WoWTranslateGlossary["KLZ下"] = "Karazhan (lower)"
 WoWTranslateGlossary["卡上"] = "Karazhan (upper)"
 WoWTranslateGlossary["KLZ上"] = "Karazhan (upper)"
--- Wailing Caverns (AH = 哀嚎 ĀiHáo)
-WoWTranslateGlossary["AH"] = "Wailing Caverns"
-WoWTranslateGlossary["ah"] = "Wailing Caverns"
+-- Wailing Caverns (WC / 哀嚎 ĀiHáo)
+-- Note: 'AH'/'ah' omitted to avoid colliding with Auction House
 -- Blackfathom Deeps (HD = 黑暗 HēiÀn / 深渊)
 WoWTranslateGlossary["HD"] = "Blackfathom Deeps"
 WoWTranslateGlossary["hd"] = "Blackfathom Deeps"
@@ -296,9 +295,8 @@ WoWTranslateGlossary["ey"] = "Dire Maul"
 -- Lower Blackrock Spire (HX = 黑下 HēiXià)
 WoWTranslateGlossary["HX"] = "Lower Blackrock Spire"
 WoWTranslateGlossary["hx"] = "Lower Blackrock Spire"
--- Upper Blackrock Spire (HS = 黑上 HēiShàng)
-WoWTranslateGlossary["HS"] = "Upper Blackrock Spire"
-WoWTranslateGlossary["hs"] = "Upper Blackrock Spire"
+-- Upper Blackrock Spire (UBRS / 黑上 HēiShàng)
+-- Note: 'HS'/'hs' omitted to avoid colliding with Hearthstone
 -- Black Morass (SG = 时光 ShíGuāng)
 WoWTranslateGlossary["SG"] = "Black Morass"
 WoWTranslateGlossary["sg"] = "Black Morass"
@@ -377,8 +375,7 @@ WoWTranslateGlossary["AY"] = "Night Elf"   -- 暗夜 ÀnYè
 WoWTranslateGlossary["ay"] = "Night Elf"
 WoWTranslateGlossary["SR"] = "Orc"         -- 兽人 ShòuRén
 WoWTranslateGlossary["sr"] = "Orc"
-WoWTranslateGlossary["NTR"] = "Tauren"     -- 牛头人 NiúTóuRén
-WoWTranslateGlossary["ntr"] = "Tauren"
+-- Note: 'NTR'/'ntr' omitted to avoid modern slang misinterpretation (use 牛头人 / 牛头)
 WoWTranslateGlossary["JM"] = "Troll"       -- 巨魔 JùMó
 WoWTranslateGlossary["jm"] = "Troll"
 WoWTranslateGlossary["WL"] = "Undead"      -- 亡灵 WángLíng
@@ -494,8 +491,7 @@ WoWTranslateGlossary["恶魔术"] = "Demo Lock"
 
 -- Druid
 WoWTranslateGlossary["德鲁伊"] = "Druid"
-WoWTranslateGlossary["XD"] = "Druid"
-WoWTranslateGlossary["xd"] = "Druid"
+-- Note: 'XD'/'xd' omitted to avoid emoticon misinterpretation (use 小德 / 德)
 WoWTranslateGlossary["小德"] = "Druid"
 WoWTranslateGlossary["奶德"] = "Resto Druid"
 WoWTranslateGlossary["ND"] = "Resto Druid"

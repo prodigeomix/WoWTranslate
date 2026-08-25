@@ -93,14 +93,19 @@ end
 -- Converts WoW-CN specific shorthands that the static glossary cannot handle.
 function WT_PreprocessIncoming(text)
     if not text then return text end
-    -- Normalize Chinese sentence terminators so Google returns a single translation
-    -- segment instead of splitting on sentence boundaries (DLL only reads first segment).
-    text = string.gsub(text, "\227\128\130", ", ")   -- 。 U+3002
-    text = string.gsub(text, "\239\188\129", ", ")   -- ！ U+FF01
-    text = string.gsub(text, "\239\188\159", ", ")   -- ？ U+FF1F
-    text = string.gsub(text, "%.", ",")              -- English period
-    text = string.gsub(text, "!", ",")               -- English exclamation
-    text = string.gsub(text, "%?", ",")              -- English question mark
+    -- Normalize Chinese sentence terminators to standard punctuation with trailing space
+    text = string.gsub(text, "\227\128\130", ". ")   -- 。 U+3002
+    text = string.gsub(text, "\239\188\129", "! ")   -- ！ U+FF01
+    text = string.gsub(text, "\239\188\159", "? ")   -- ？ U+FF1F
+
+    -- Mask numeric progress counters (e.g. 11/30, 1/30, 0/8, 999/1000)
+    -- before slang and currency rewriting so they are never corrupted.
+    local counters = {}
+    text = string.gsub(text, "(%d+)%s*/%s*(%d+)", function(a, b)
+        table.insert(counters, a .. "/" .. b)
+        return "\001" .. table.getn(counters) .. "\001"
+    end)
+
     -- Currency: XG = X gold, XY = X silver. Only when not followed by a letter
     -- so "YY" (Shadowfang Keep), "GM" etc. are not touched.
     -- Run BEFORE 88 handling so "88Y" → "88s" (silver), not "bye Y".
@@ -134,6 +139,15 @@ function WT_PreprocessIncoming(text)
     text = string.gsub(text, "([^%w])11$",        "%1yes")
     text = string.gsub(text, "^11([^%w])",         "yes%1")
     text = string.gsub(text, "^11$",               "yes")
+
+    -- Restore masked progress counters
+    if table.getn(counters) > 0 then
+        text = string.gsub(text, "\001(%d+)\001", function(idx)
+            local num = tonumber(idx)
+            return (num and counters[num]) or ""
+        end)
+    end
+
     -- 密 (mì, U+5BC6, UTF-8 \229\175\134) = "whisper" in CN WoW slang.
     -- Two context-specific cases that the static glossary cannot cover safely:
     -- compound forms (密我/来密/求密/密密/etc.) are handled by the glossary.
@@ -170,40 +184,57 @@ end
 function WT_DetectSourceLanguage(text)
     if not text then return nil end
     local enabled = (WoWTranslateDB and WoWTranslateDB.enabledSourceLangs)
-                    or { zh=true, ja=true, ko=true, ru=true }
-    -- If table exists but every lang is nil/false, fall back to all-enabled
-    if not enabled.zh and not enabled.ja and not enabled.ko and not enabled.ru then
-        enabled = { zh=true, ja=true, ko=true, ru=true }
+                    or { zh=true, ja=true, ko=true, ru=true, en=false }
+    -- If table exists but every lang is nil/false, fall back to all-enabled (except en)
+    if not enabled.zh and not enabled.ja and not enabled.ko and not enabled.ru and not enabled.en then
+        enabled = { zh=true, ja=true, ko=true, ru=true, en=false }
     end
 
     local hasKorean   = false
-    local hasHiragana = false
+    local hasKana     = false
     local hasCJK      = false
     local hasRussian  = false
     local asciiAlpha  = 0
 
-    for i = 1, string.len(text) do
+    local textLen = string.len(text)
+    local i = 1
+    while i <= textLen do
         local b = string.byte(text, i)
-        if b >= 234 and b <= 237 then hasKorean = true
-        elseif b == 227            then hasHiragana = true
-        elseif b >= 228 and b <= 233 then hasCJK = true
-        elseif b == 208 or b == 209  then hasRussian = true
-        elseif (b >= 65 and b <= 90) or (b >= 97 and b <= 122) then
-            asciiAlpha = asciiAlpha + 1
+        if b >= 234 and b <= 237 then
+            hasKorean = true
+            i = i + 3
+        elseif b == 227 then
+            -- Check second byte to distinguish Japanese Kana (0x81..0x83 = 129..131)
+            -- from CJK symbols & punctuation (0x80 = 128)
+            local b2 = (i + 1 <= textLen) and string.byte(text, i + 1) or nil
+            if b2 and b2 >= 129 and b2 <= 131 then
+                hasKana = true
+            end
+            i = i + 3
+        elseif b >= 228 and b <= 233 then
+            hasCJK = true
+            i = i + 3
+        elseif b == 208 or b == 209 then
+            hasRussian = true
+            i = i + 2
+        else
+            if (b >= 65 and b <= 90) or (b >= 97 and b <= 122) then
+                asciiAlpha = asciiAlpha + 1
+            end
+            i = i + 1
         end
     end
 
     if enabled.ko and hasKorean   then return "ko" end
-    -- Check zh BEFORE ja: Chinese punctuation (。、「」 etc.) uses UTF-8 byte 0xE3 (227),
-    -- the same first byte as Japanese hiragana/katakana. Chinese messages containing
-    -- both punctuation (byte 227 → hasHiragana) and characters (bytes 228-233 → hasCJK)
-    -- must be treated as Chinese, not Japanese.
+    -- Check Japanese (hasKana) BEFORE Chinese (hasCJK):
+    -- Japanese text almost always mixes Kanji (bytes 228-233) with Hiragana/Katakana (byte 227).
+    -- By disambiguating byte 227's second byte (Kana 0x81..0x83 vs punctuation 0x80),
+    -- any message with Kana is accurately detected as Japanese even if it contains Kanji.
+    if enabled.ja and hasKana     then return "ja" end
     if enabled.zh and hasCJK      then return "zh" end
-    if enabled.ja and hasHiragana then return "ja" end
     if enabled.ru and hasRussian  then return "ru" end
-    -- English: >= 4 ASCII alpha chars, no CJK/Korean/Japanese/Russian.
-    -- Detection is unconditional (same-language skip prevents en→en no-ops).
-    if asciiAlpha >= 4 and not (hasCJK or hasKorean or hasHiragana or hasRussian) then
+    -- English: >= 4 ASCII alpha chars, no CJK/Korean/Japanese/Russian, and enabled in settings.
+    if enabled.en and asciiAlpha >= 4 and not (hasCJK or hasKorean or hasKana or hasRussian) then
         return "en"
     end
     return nil
@@ -338,13 +369,20 @@ function WT_ProcessSegmentsIncoming(segments, detectedLang)
                     WoWTranslate_CheckOutGlossaryExact,
                     WoWTranslate_CheckOutGlossaryPartial,
                     nil)
-            else
-                -- ZH -> EN (or other non-EN): preprocess + incoming glossary
+            elseif detectedLang == "zh" then
+                -- ZH -> EN: preprocess Chinese slang/abbreviations + incoming glossary
                 seg.content = WT_ApplyGlossaryCascade(
                     seg.content,
                     WoWTranslate_CheckGlossaryExact,
                     WoWTranslate_CheckGlossaryPartial,
                     WT_PreprocessIncoming)
+            else
+                -- RU / JA / KO -> EN: incoming glossary check without Chinese slang preprocessing
+                seg.content = WT_ApplyGlossaryCascade(
+                    seg.content,
+                    WoWTranslate_CheckGlossaryExact,
+                    WoWTranslate_CheckGlossaryPartial,
+                    nil)
             end
         end
     end

@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5.4  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5.5  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -28,7 +28,9 @@ Persistent SQLite Cache (translations.db):
 """
 
 import argparse
+import copy
 import hashlib
+import html
 import http.server
 import json
 import os
@@ -39,6 +41,7 @@ import sqlite3
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -50,7 +53,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-VERSION = "3.5.4"
+VERSION = "3.5.5"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
@@ -87,24 +90,24 @@ DEFAULT_CONFIG = {
 def load_config(path):
     if path is None or not os.path.exists(path):
         print(f"[config] No config file found at '{path}', using defaults.")
-        return dict(DEFAULT_CONFIG)
+        return copy.deepcopy(DEFAULT_CONFIG)
     if tomllib is None:
         print("[config] tomllib/tomli not installed -- using defaults.")
-        return dict(DEFAULT_CONFIG)
+        return copy.deepcopy(DEFAULT_CONFIG)
     try:
         with open(path, "rb") as f:
             cfg = tomllib.load(f)
         for k, v in DEFAULT_CONFIG.items():
             if k not in cfg:
-                cfg[k] = v
+                cfg[k] = copy.deepcopy(v)
         # Ensure google fallback is always present if no backends configured
         if "backends" not in cfg or not cfg["backends"]:
-            cfg["backends"] = DEFAULT_CONFIG["backends"]
+            cfg["backends"] = copy.deepcopy(DEFAULT_CONFIG["backends"])
         print(f"[config] Loaded {path}")
         return cfg
     except Exception as e:
         print(f"[config] Error reading {path}: {e}, using defaults.")
-        return dict(DEFAULT_CONFIG)
+        return copy.deepcopy(DEFAULT_CONFIG)
 
 # ---------------------------------------------------------------------------
 # Path Auto-Detection
@@ -166,6 +169,8 @@ _db_local = threading.local()
 def _db(db_path):
     if not hasattr(_db_local, "conn") or _db_local.conn is None:
         _db_local.conn = sqlite3.connect(db_path, check_same_thread=False)
+        _db_local.conn.execute("PRAGMA journal_mode=WAL")
+        _db_local.conn.execute("PRAGMA busy_timeout=5000")
         _db_local.conn.execute("""
             CREATE TABLE IF NOT EXISTS translations (
                 src_hash  TEXT NOT NULL,
@@ -274,9 +279,10 @@ def _call_ollama(text, from_lang, to_lang, backend):
     timeout = backend.get("timeout", 20)
     keep_alive = backend.get("keep_alive", "1h")
     temperature = backend.get("temperature", 0.0)
-    num_predict = backend.get("num_predict", 128)
+    num_predict = backend.get("num_predict", 256)
 
     result = ""
+    chat_exc = None
     # 1. Primary: Native Ollama /api/chat endpoint (Structured system & user roles)
     try:
         chat_payload = json.dumps({
@@ -301,31 +307,38 @@ def _call_ollama(text, from_lang, to_lang, backend):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         result = data.get("message", {}).get("content", "").strip()
-    except Exception:
+    except Exception as ce:
+        chat_exc = ce
         result = ""
 
     # 2. Fallback: /api/generate if /api/chat returned empty or was unavailable
     if not result:
-        prompt = f"{system_prompt}\n\nChat: {text}\nTranslation:"
-        gen_payload = json.dumps({
-            "model": model,
-            "prompt": prompt,
-            "stream": False,
-            "keep_alive": keep_alive,
-            "options": {
-                "temperature": temperature,
-                "num_predict": num_predict,
-            },
-        }).encode("utf-8")
+        try:
+            prompt = f"{system_prompt}\n\nChat: {text}\nTranslation:"
+            gen_payload = json.dumps({
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "keep_alive": keep_alive,
+                "options": {
+                    "temperature": temperature,
+                    "num_predict": num_predict,
+                },
+            }).encode("utf-8")
 
-        req = urllib.request.Request(
-            gen_url, data=gen_payload,
-            headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        result = data.get("response", "").strip()
+            req = urllib.request.Request(
+                gen_url, data=gen_payload,
+                headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            result = data.get("response", "").strip()
+        except Exception as ge:
+            err_msg = f"Ollama /api/generate failed: {ge}"
+            if chat_exc:
+                err_msg += f" (chat error: {chat_exc})"
+            raise ValueError(err_msg)
 
     # Post-process: strip <think>...</think> tags if model is reasoning-based (e.g. DeepSeek-R1)
     result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
@@ -436,9 +449,8 @@ def _call_google(text, from_lang, to_lang, backend):
             res = "".join(parts).strip()
             if res:
                 return res
-    except Exception as e:
-        if "429" not in str(e):
-            pass
+    except Exception:
+        pass
 
     # 2. Secondary: clients5.google.com
     try:
@@ -466,7 +478,6 @@ def _call_google(text, from_lang, to_lang, backend):
             raw = resp.read().decode("utf-8")
         match = re.search(r'class="result-container">([^<]+)', raw)
         if match:
-            import html
             return html.unescape(match.group(1)).strip()
     except Exception as e3:
         raise ValueError(f"Google Translate rate limit / connection error ({e3})")
@@ -494,6 +505,14 @@ def _call_gemini(text, from_lang, to_lang, backend):
         f"2. Preservation: Keep player names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP) intact.\n"
         f"3. Output Format: Return ONLY the raw translated plain text without quotes, markdown bolding, explanations, commentary, or channel prefixes."
     )
+
+    safety_settings = [
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+    ]
+
     payload = json.dumps({
         "contents": [
             {
@@ -505,23 +524,28 @@ def _call_gemini(text, from_lang, to_lang, backend):
         "generationConfig": {
             "temperature": 0.1,
             "maxOutputTokens": 256,
-        }
+        },
+        "safetySettings": safety_settings,
     }).encode("utf-8")
     
     # Try configured model, fallback to gemini-2.5-flash on 404
     models_to_try = [model]
     if model != "gemini-2.5-flash":
         models_to_try.append("gemini-2.5-flash")
-    if "gemini-3.6-flash" not in models_to_try:
-        models_to_try.append("gemini-3.6-flash")
+    if "gemini-2.0-flash" not in models_to_try:
+        models_to_try.append("gemini-2.0-flash")
 
     last_exc = None
     for m in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
         req = urllib.request.Request(
             url,
             data=payload,
-            headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": USER_AGENT,
+                "x-goog-api-key": api_key,
+            },
             method="POST",
         )
         try:
@@ -574,7 +598,9 @@ def translate(text, from_lang, to_lang, backends):
             result = fn(text, from_lang, to_lang, backend)
             if result:
                 # Clean up apostrophe space artifact e.g. "doesn' t" -> "doesn't"
-                result = re.sub(r"'%s+(\w)", r"'\1", result)
+                result = re.sub(r"'\s+(\w)", r"'\1", result)
+                # Sanitize wire format separator | to /
+                result = result.replace("|", "/")
                 # Formatted log with clean length limit
                 t_disp = (text[:50] + "...") if len(text) > 50 else text
                 r_disp = (result[:50] + "...") if len(result) > 50 else result
@@ -596,7 +622,7 @@ _http_results_lock = threading.Lock()
 def store_http_result(req_id, result, error):
     with _http_results_lock:
         _http_results[req_id] = {
-            "result": result or "",
+            "result": (result or "").replace("|", "/"),
             "error": error or "",
             "time": time.time(),
         }
@@ -668,6 +694,8 @@ def _worker(db_path, backends, ipc_targets):
             _job_queue.task_done()
 
 def _write_ipc_result(req_id, status, body, ipc_targets):
+    if status == "ok" and body:
+        body = body.replace("|", "/")
     for ipc_root in ipc_targets:
         is_imports = os.path.basename(ipc_root).lower() == "imports"
         if is_imports:
@@ -785,11 +813,14 @@ def start_http_server(port, db_path, backends, ipc_targets):
     ProxyHTTPHandler.backends = backends
     ProxyHTTPHandler.ipc_targets = ipc_targets
     
-    class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
-        daemon_threads = True
+    server_cls = getattr(http.server, "ThreadingHTTPServer", None)
+    if server_cls is None:
+        class FallbackThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+            daemon_threads = True
+        server_cls = FallbackThreadingHTTPServer
 
     try:
-        httpd = ThreadingHTTPServer(("127.0.0.1", port), ProxyHTTPHandler)
+        httpd = server_cls(("127.0.0.1", port), ProxyHTTPHandler)
         t = threading.Thread(target=httpd.serve_forever, daemon=True, name="HTTPServer")
         t.start()
         print(f"[http] HTTP server listening on http://127.0.0.1:{port}")

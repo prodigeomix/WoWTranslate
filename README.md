@@ -1,4 +1,4 @@
-# 🌐 WoWTranslate v3.5.4 — Universal Real-Time Chat Translator
+# 🌐 WoWTranslate v3.5.5 — Universal Real-Time Chat Translator
 ### World of Warcraft 1.12.1 (Vanilla / Turtle WoW)
 
 [![Latest Release](https://img.shields.io/github/v/release/prodigeomix/WoWTranslate?color=blue&label=Latest%20Release)](https://github.com/prodigeomix/WoWTranslate/releases/latest)
@@ -7,7 +7,7 @@
 
 Translate World of Warcraft chat in real-time between **Chinese, English, Russian, Japanese, and Korean** directly inside your game!
 
-WoWTranslate runs **100% locally and offline on your computer** using **Ollama** (your own private AI model). It is completely free, private, has zero monthly limits, and translates chat in **under 50 milliseconds**.
+WoWTranslate is **local-first** using **Ollama** (your own private AI model) with optional automatic cloud fallback (Google Translate). It is completely free, private, has zero monthly limits, and offers real-time translations (instant SQLite cache, ~50ms–200ms local AI inference).
 
 ---
 
@@ -72,11 +72,11 @@ To download the AI translation brain onto your computer, run a single command in
 
    | Model Command | Download Size | Best For | Speed | Required `config.toml` setting |
    | :--- | :--- | :--- | :--- | :--- |
-   | `ollama pull qwen2.5` | ~4.7 GB | Standard / Gaming PCs | ⚡ Fast | `model = "qwen2.5"` *(Default)* |
+   | `ollama pull qwen2.5` | ~4.7 GB | Standard / Gaming PCs (7B default) | ⚡ Fast | `model = "qwen2.5"` *(Default)* |
    | `ollama pull qwen2.5:1.5b` | ~1.0 GB | **Laptops & Older PCs** (Recommended for speed!) | 🚀 Instant | `model = "qwen2.5:1.5b"` |
    | `ollama pull qwen2.5:3b` | ~2.0 GB | Great balance of speed & quality | ⚡ Fast | `model = "qwen2.5:3b"` |
    | `ollama pull qwen2.5:0.5b` | ~400 MB | Ultra-low-end PCs / CPU only | 🚀 Instant | `model = "qwen2.5:0.5b"` |
-   | `ollama pull qwen2.5:7b` | ~4.7 GB | High-end GPUs (8GB+ VRAM) | ⚡ Fast | `model = "qwen2.5:7b"` |
+   | `ollama pull qwen2.5:7b` | ~4.7 GB | High-end GPUs (alias for 7B default) | ⚡ Fast | `model = "qwen2.5:7b"` |
 
 3. **Paste the command in CMD and press Enter:**
    - Example for ultra-fast performance on any PC:
@@ -104,7 +104,7 @@ To download the AI translation brain onto your computer, run a single command in
 3. A small black window will open and say:
    ```text
    ==========================================================
-     WoWTranslate Universal Proxy v3.5.4
+      WoWTranslate Universal Proxy v3.5.5
      Backends     : ['ollama', 'google']
    ==========================================================
    [proxy] Ready! Proxy is actively listening for translations.
@@ -153,7 +153,7 @@ To download the AI translation brain onto your computer, run a single command in
 
 ## ⚙️ Configuration (`config.toml`)
 
-Your [`config.toml`](file:///c:/Games/Interface/AddOns/WoWTranslate/config.toml) is located in `Interface\AddOns\WoWTranslate\config.toml`. It is pre-configured with smart defaults:
+Your [`config.toml`](config.toml) is located in `Interface\AddOns\WoWTranslate\config.toml`. It is pre-configured with smart defaults:
 
 ```toml
 # WoWTranslate Proxy Configuration
@@ -163,14 +163,14 @@ cache_db = "translations.db"
 stale_ttl = 60
 scan_interval = 0.05
 
-# 1. Ollama (100% Local & Offline AI)
+# 1. Ollama (Local AI)
 [[backends]]
 type = "ollama"
 url = "http://localhost:11434"
 model = "qwen2.5"          # Change this to match your pulled model (e.g. "qwen2.5:1.5b" or "qwen2.5:3b")
 timeout = 20
 temperature = 0.0
-num_predict = 128
+num_predict = 256
 keep_alive = "1h"
 
 # 2. Built-in Google Web Translate (Automatic fallback if Ollama is closed or model missing)
@@ -209,8 +209,8 @@ This error means Ollama is running, but the **model name in `config.toml` does n
 - In game, type `/wt diag` in chat. If it says `Active Transport: SuperWoW File IPC (Proxy)` with `IO Test: PASS`, you are 100% connected!
 
 #### 5. How fast is it?
-- Translations for previously seen messages and player names load in **0.05 milliseconds** from your local SQLite cache (`translations.db`).
-- Brand new messages translated by your local Ollama model take between **50ms to 200ms**.
+- Translations for previously seen messages and player names load **instantly (< 1ms)** from your local SQLite cache (`translations.db`).
+- Brand new messages translated by your local Ollama model take between **50ms to 200ms** depending on model size and GPU.
 
 #### 6. How do I fix "Python is not found" or "Python not in PATH"?
 If `start_proxy.bat` says Python was not found:

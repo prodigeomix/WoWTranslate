@@ -202,7 +202,7 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
     -- =====================================================================
     -- OUTGOING TRANSLATION COMMANDS
     -- =====================================================================
-    elseif cmd == "outgoing" then
+    elseif cmd == "outgoing" or cmd == "out" then
         if arg == "on" or arg == "enable" then
             WoWTranslate_SetOutgoingEnabled(true)
             DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Outgoing translation enabled|r")
@@ -376,13 +376,15 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  /wt on|off - Enable/disable incoming translation")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt status - Show full status & connected backend")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt transport [proxy|dll|auto] - Switch transport backend")
+        DEFAULT_CHAT_FRAME:AddMessage("  /wt diag - Show transport & I/O diagnostics")
+        DEFAULT_CHAT_FRAME:AddMessage("  /wt hooktest - Verify chat frame hook integrity")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt test [text] - Test incoming translation")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt testout [text] - Test outgoing translation")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt reset - Reset hooks, rate limit & clear stuck queues")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt clearcache - Clear translation cache")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt debug - Toggle debug mode")
         DEFAULT_CHAT_FRAME:AddMessage("  -- Outgoing Translation --")
-        DEFAULT_CHAT_FRAME:AddMessage("  /wt outgoing [on|off] - Toggle/set outgoing translation")
+        DEFAULT_CHAT_FRAME:AddMessage("  /wt out [on|off] - Toggle/set outgoing translation (alias: /wt outgoing)")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt outchannel [channel] - Show/toggle outgoing channels")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt prefix <text> - Set outgoing message prefix")
     end
@@ -429,7 +431,7 @@ function WT_InitializeSettings()
     if WoWTranslateDB.incomingChannels.HARDCORE == nil then WoWTranslateDB.incomingChannels.HARDCORE = false end
     if WoWTranslateDB.incomingChannels.ENGLISH == nil then WoWTranslateDB.incomingChannels.ENGLISH = false end
 
-    if WoWTranslateDB.translationColorFollow == nil then WoWTranslateDB.translationColorFollow = false end
+    if WoWTranslateDB.translationColorFollow == nil then WoWTranslateDB.translationColorFollow = true end
 
     WT_DEBUG_MODE = WoWTranslateDB.debugMode or false
 
@@ -472,7 +474,7 @@ function WT_OnAddonLoaded()
         statusText = "|cFFFFFF00Backend not connected (Run start_proxy.bat)|r"
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v1.6 - " .. statusText .. " | /wt show")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.5.5 - " .. statusText .. " | /wt show")
 end
 
 -- ============================================================================
