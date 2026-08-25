@@ -686,6 +686,17 @@ function WoWTranslate_API.ClearPending()
         table.insert(reqIds, reqId)
     end
     for _, reqId in ipairs(reqIds) do
+        -- Fire each dropped request's callback with an error so replaceMode-
+        -- suppressed originals flush immediately instead of waiting for the
+        -- 30 s pending-message cleanup timer.
+        local reqData = pendingRequests[reqId]
+        if reqData and reqData.callbacks then
+            for _, cb in ipairs(reqData.callbacks) do
+                if type(cb) == "function" then
+                    pcall(cb, nil, "reset")
+                end
+            end
+        end
         ClearRequest(reqId)
     end
     pendingRequests    = {}

@@ -608,7 +608,8 @@ function WT_HookChatFrames(force)
                                 if WoWTranslateDB and WoWTranslateDB.translationColorFollow then
                                     bodyHex = chanColorHex or ""
                                 end
-                                local displayBody = bodyHex ~= "" and ("|cFF" .. bodyHex .. body .. "|r") or body
+                                local safeBody = WT_SanitizeDisplayText and WT_SanitizeDisplayText(body) or body
+                                local displayBody = bodyHex ~= "" and ("|cFF" .. bodyHex .. safeBody .. "|r") or safeBody
                                 local sp = WT_BuildSenderPrefix(capturedArg2, resolvedSenderName, channel, resolvedGuildName)
                                 return prefix .. " " .. sp .. displayBody
                             end
@@ -631,7 +632,7 @@ function WT_HookChatFrames(force)
                                 for _, seg in ipairs(segments) do
                                     reconstructed = reconstructed .. seg.content
                                 end
-                                ResolveNamesAndPost(reconstructed, function(wtMsg)
+                                ResolveNamesAndPost(WT_SanitizeDisplayText and WT_SanitizeDisplayText(reconstructed) or reconstructed, function(wtMsg)
                                     if wimWhisperUser and type(WIM_PostMessage) == "function" then
                                         WIM_PostMessage(wimWhisperUser, wtMsg, 3)
                                     else
@@ -655,7 +656,7 @@ function WT_HookChatFrames(force)
                                 WT_DebugLog("Cache hit")
                                 local reconstructed = WT_ReconstructMessage(segments, cached)
                                 WT_frameTranslationTargets[capturedArg1] = nil
-                                ResolveNamesAndPost(reconstructed, function(wtMsg)
+                                ResolveNamesAndPost(WT_SanitizeDisplayText and WT_SanitizeDisplayText(reconstructed) or reconstructed, function(wtMsg)
                                     if wimWhisperUser and type(WIM_PostMessage) == "function" then
                                         WIM_PostMessage(wimWhisperUser, wtMsg, 3)
                                     else
@@ -715,7 +716,7 @@ function WT_HookChatFrames(force)
                                     end
                                     local targets = WT_frameTranslationTargets[capturedArg1]
                                     WT_frameTranslationTargets[capturedArg1] = nil
-                                    ResolveNamesAndPost(reconstructed, function(wtMsg)
+                                    ResolveNamesAndPost(WT_SanitizeDisplayText and WT_SanitizeDisplayText(reconstructed) or reconstructed, function(wtMsg)
                                         if wimWhisperUser and type(WIM_PostMessage) == "function" then
                                             WIM_PostMessage(wimWhisperUser, wtMsg, 3)
                                         elseif targets then
@@ -766,6 +767,10 @@ function WT_HookChatFrames(force)
                                 end
                             elseif replacePendingData then
                                 replacePendingKey = "r|" .. tostring(capturedThis) .. "|" .. capturedArg1
+                                -- Monotonic suffix prevents identical-text collisions from
+                                -- overwriting a still-pending original (which would lose it).
+                                WT_pendingKeyCounter = (WT_pendingKeyCounter or 0) + 1
+                                replacePendingKey = replacePendingKey .. "|" .. tostring(WT_pendingKeyCounter)
                                 replacePendingData.timestamp = GetTime()
                                 WT_pendingMessages[replacePendingKey] = replacePendingData
                             end

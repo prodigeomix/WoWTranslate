@@ -380,6 +380,23 @@ function WT_StripColorCodes(text)
     return result
 end
 
+-- Sanitize BACKEND-DERIVED text (translation results, cached entries) before it
+-- is displayed via AddMessage: strip every WoW escape sequence so a malicious
+-- backend or poisoned cache cannot forge item links, recolor text, or inject
+-- hyperlink handlers into the chat frame.
+function WT_SanitizeDisplayText(text)
+    if not text then return text end
+    local result = tostring(text)
+    result = string.gsub(result, "|c%x%x%x%x%x%x%x%x", "")  -- color start
+    result = string.gsub(result, "|r", "")                  -- color end
+    result = string.gsub(result, "|H.-|h(.-)|h", "%1")      -- hyperlink: keep label text only
+    result = string.gsub(result, "|H.-|h", "")              -- unterminated hyperlink opener
+    result = string.gsub(result, "|T.-|t", "")              -- texture escapes
+    result = string.gsub(result, "|n", " ")                 -- newline escape
+    result = string.gsub(result, "||", "|")                 -- unescape literal pipes
+    return result
+end
+
 -- Split a fully-formatted chat line into header and message body.
 -- The header is everything up to and including the first ": " separator
 -- (e.g. "|cFF...[PlayerName]|r says: ").  The body is what follows.
@@ -453,7 +470,10 @@ function WT_ReconstructMessage(segments, translatedText)
 
         -- Match variations of http://ph.wt/N produced by Google Translate's spacing/punctuation mangling.
         -- We use a Lua pattern to handle inserted spaces, commas, optional 's', etc.
-        local pattern = "http[s]*[:]*[%s]*//[%s]*ph[%s%,%.]*wt[%s/]*" .. tostring(i)
+        -- Tightened: allow whitespace inside the scheme only; the ph.wt host must
+        -- stay contiguous (optional single separator between tokens max) so crafted
+        -- remote text like 'http : // ph , wt 1' cannot consume arbitrary spans.
+        local pattern = "https*:%s*//%s*ph%.?%s*wt%s*/%s*" .. tostring(i)
         
         local startPos, endPos = string.find(workText, pattern)
         if startPos then

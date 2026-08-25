@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5.5  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5.6  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -53,7 +53,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-VERSION = "3.5.5"
+VERSION = "3.5.6"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
@@ -90,9 +90,11 @@ DEFAULT_CONFIG = {
 def load_config(path):
     if path is None or not os.path.exists(path):
         print(f"[config] No config file found at '{path}', using defaults.")
+        print("[config] WARNING: default config includes an external Google web-translate fallback; chat text will be sent to Google unless Ollama is running. Edit config.toml to change this.")
         return copy.deepcopy(DEFAULT_CONFIG)
     if tomllib is None:
         print("[config] tomllib/tomli not installed -- using defaults.")
+        print("[config] WARNING: default config includes an external Google web-translate fallback; chat text will be sent to Google unless Ollama is running. Edit config.toml to change this.")
         return copy.deepcopy(DEFAULT_CONFIG)
     try:
         with open(path, "rb") as f:
@@ -103,10 +105,12 @@ def load_config(path):
         # Ensure google fallback is always present if no backends configured
         if "backends" not in cfg or not cfg["backends"]:
             cfg["backends"] = copy.deepcopy(DEFAULT_CONFIG["backends"])
+            print("[config] WARNING: no backends configured; enabling Google external fallback (chat text goes to Google).")
         print(f"[config] Loaded {path}")
         return cfg
     except Exception as e:
         print(f"[config] Error reading {path}: {e}, using defaults.")
+        print("[config] WARNING: your configured backends were NOT loaded because the config is malformed; the default backend list (including external Google) is active instead. FIX config.toml to restore local-only translation.")
         return copy.deepcopy(DEFAULT_CONFIG)
 
 # ---------------------------------------------------------------------------
@@ -221,23 +225,73 @@ def cache_count(db_path):
     except Exception:
         return 0
 
+def cache_purge_code_switched(db_path):
+    """One-time-per-startup cleanup: drop cached translations that contain
+    untranslated English words mixed into non-Latin output (small-LLM
+    code-switching artifacts, e.g. '是的，现在everything都很贵。'). Runs at
+    startup so users who received bad cached entries get them fixed silently."""
+    try:
+        conn = _db(db_path)
+        rows = conn.execute(
+            "SELECT src_hash, from_lang, to_lang, result FROM translations"
+        ).fetchall()
+    except Exception as e:
+        print(f"[cache] purge error: {e}")
+        return 0
+    bad = []
+    for h, fl, tl, result in rows:
+        # Only inspect pairs whose target is a non-Latin script; skip pure-EN targets.
+        if not re.search(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff]", result or ""):
+            continue
+        try:
+            # We only stored the hash, not the source text — so detect the
+            # artifact directly in the output. Require the English word to be
+            # EMBEDDED in non-Latin script: a non-ASCII, non-Latin char
+            # immediately before AND after it. This spares legit mixed chat
+            # like '我喜欢Star Wars' or trailing brand/item names.
+            for m in re.finditer(r"[A-Za-z']+", result):
+                wl = m.group(0).lower()
+                if len(wl) < 4 or wl in _PRESERVE_TERMS:
+                    continue
+                s, e = m.start(), m.end()
+                if s == 0 or e >= len(result):
+                    continue  # at string edge -> not embedded
+                before, after = result[s - 1], result[e]
+                if (ord(before) > 0x2FFF and not before.isascii()
+                        and ord(after) > 0x2FFF and not after.isascii()):
+                    bad.append((h, fl, tl))
+                    break
+        except Exception:
+            continue
+    if bad:
+        conn.executemany(
+            "DELETE FROM translations WHERE src_hash=? AND from_lang=? AND to_lang=?",
+            bad,
+        )
+        conn.commit()
+    print(f"[cache] startup purge: removed {len(bad)} code-switched entr{'y' if len(bad)==1 else 'ies'} "
+          f"of {len(rows)} cached")
+    return len(bad)
+
 # ---------------------------------------------------------------------------
 _ollama_online = None
 _ollama_last_check = 0
+_ollama_lock = threading.Lock()
 
 def _is_ollama_online(url="http://localhost:11434/api/tags"):
     global _ollama_online, _ollama_last_check
     now = time.time()
-    if _ollama_online is not None and (now - _ollama_last_check) < 15:
+    with _ollama_lock:
+        if _ollama_online is not None and (now - _ollama_last_check) < 15:
+            return _ollama_online
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                _ollama_online = (resp.status == 200)
+        except Exception:
+            _ollama_online = False
+        _ollama_last_check = now
         return _ollama_online
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
-            _ollama_online = (resp.status == 200)
-    except Exception:
-        _ollama_online = False
-    _ollama_last_check = now
-    return _ollama_online
 
 def _call_ollama(text, from_lang, to_lang, backend):
     raw_url = backend.get("url", "http://localhost:11434").rstrip("/")
@@ -265,14 +319,18 @@ def _call_ollama(text, from_lang, to_lang, backend):
     }
     src_lang = lang_map.get(from_lang.lower(), from_lang)
     tgt_lang = lang_map.get(to_lang.lower(), to_lang)
+    if src_lang.lower() == "auto":
+        # LLM backends have no native auto-detect; instruct the model instead.
+        src_lang = "the source language (auto-detect it)"
 
     system_prompt = (
         f"You are a specialized real-time translator for World of Warcraft Classic.\n"
         f"Translate accurately from {src_lang} to {tgt_lang} using natural MMORPG terminology.\n\n"
         f"Rules:\n"
         f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., 'plsease' -> please, '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts).\n"
-        f"2. Preservation: Keep player names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP) intact.\n"
-        f"3. Output Format: Return ONLY the raw translated text. No explanations, quotes, markdown, conversational commentary, or channel prefixes."
+        f"2. Full Translation: Translate EVERY ordinary word into the target language. Common vocabulary (e.g., everything, need, want, gold, run) must NEVER be left untranslated in the output.\n"
+        f"3. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
+        f"4. Output Format: Return ONLY the raw translated text. No explanations, quotes, markdown, conversational commentary, or channel prefixes."
     )
 
     model = backend.get("model", "qwen2.5")
@@ -344,9 +402,13 @@ def _call_ollama(text, from_lang, to_lang, backend):
     result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
     # Strip leading "Translation:" prefix if model outputs it
     result = re.sub(r"^(?:Translation|Translated text|Output):\s*", "", result, flags=re.IGNORECASE).strip()
-    # Strip markdown quotes or bolding
-    result = re.sub(r"^\*+(.*?)\*+$", r"\1", result)
-    result = re.sub(r'^["\'](.*)["\']$', r"\1", result)
+    # Strip markdown quotes or bolding (only when BOTH ends use the same wrapper
+# and the content is short enough that it's clearly model chatter, not speech)
+    result = re.sub(r"^\*{2,}(.+)\*{2,}$", r"\1", result)  # **bold** only, not *emphasis*
+    if len(result) <= 120:
+        q = result[0]
+        if len(result) >= 2 and q in "\"'" and result[-1] == q:
+            result = result[1:-1]
 
     if not result:
         raise ValueError("Ollama returned empty response")
@@ -364,6 +426,8 @@ def _call_deepl(text, from_lang, to_lang, backend):
     }
     src = deepl_map.get(from_lang.lower(), from_lang.upper())
     tgt = deepl_map.get(to_lang.lower(), to_lang.upper())
+    if from_lang.lower() == "auto":
+        src = "auto"  # DeepL native auto-detect
     
     endpoint = "https://api-free.deepl.com/v2/translate" if api_key.endswith(":fx") else "https://api.deepl.com/v2/translate"
     params = urllib.parse.urlencode({
@@ -403,8 +467,9 @@ def _call_openai(text, from_lang, to_lang, backend):
         f"Translate accurately from {from_lang} to {to_lang} using natural MMORPG terminology.\n\n"
         f"Rules:\n"
         f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., 'plsease' -> please, '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts).\n"
-        f"2. Preservation: Keep player names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP) intact.\n"
-        f"3. Output Format: Return ONLY the raw translated text without quotes, markdown, explanations, or channel prefixes."
+        f"2. Full Translation: Translate EVERY ordinary word into the target language. Common vocabulary (e.g., everything, need, want, gold, run) must NEVER be left untranslated in the output.\n"
+        f"3. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
+        f"4. Output Format: Return ONLY the raw translated text without quotes, markdown, explanations, or channel prefixes."
     )
     payload = json.dumps({
         "model": model,
@@ -431,8 +496,8 @@ def _call_openai(text, from_lang, to_lang, backend):
 def _call_google(text, from_lang, to_lang, backend):
     """Free Google Translate web API fallback with multi-endpoint rotation against 429 rate limits."""
     timeout = backend.get("timeout", 8)
-    sl = from_lang.lower()
-    tl = to_lang.lower()
+    sl = urllib.parse.quote(str(from_lang).lower(), safe="")
+    tl = urllib.parse.quote(str(to_lang).lower(), safe="")
     encoded = urllib.parse.quote(text)
     
     # 1. Primary: translate.googleapis.com
@@ -502,8 +567,9 @@ def _call_gemini(text, from_lang, to_lang, backend):
         f"Translate accurately from {from_lang} to {to_lang} using natural MMORPG terminology.\n\n"
         f"Rules:\n"
         f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., 'plsease' -> please, '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts).\n"
-        f"2. Preservation: Keep player names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP) intact.\n"
-        f"3. Output Format: Return ONLY the raw translated plain text without quotes, markdown bolding, explanations, commentary, or channel prefixes."
+        f"2. Full Translation: Translate EVERY ordinary word into the target language. Common vocabulary (e.g., everything, need, want, gold, run) must NEVER be left untranslated in the output.\n"
+        f"3. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
+        f"4. Output Format: Return ONLY the raw translated plain text without quotes, markdown bolding, explanations, commentary, or channel prefixes."
     )
 
     safety_settings = [
@@ -583,12 +649,53 @@ BACKEND_FNS = {
     "google": _call_google,
 }
 
+# Abbreviations/terms the system prompt tells LLMs to keep intact.
+# An English word in the output is only "suspicious" (code-switching) if it is
+# NOT in this list.
+_PRESERVE_TERMS = {
+    "lfg", "lfm", "dps", "mt", "ot", "cc", "sr", "hr", "gdkp",
+    "afk", "brb", "wts", "wtb", "wtt", "pst", "bio", "brd", "mc", "bwl",
+    "zf", "sm", "mara", "dm", "ubrs", "lbrs", "strat", "scholo", "ony",
+    "zg", "aq", "silithus", "epic", "boe", "bop", "aoe", "mob", "npc",
+    "buff", "debuff", "rez", "res", "loot", "tank", "heal", "heals",
+    "pull", "aggro", "wipe", "trash", "boss", "adds", "dot", "hot",
+    "cd", "cds", "mana", "hp", "xp", "lvl", "level", "gold", "gank",
+    "alt", "main", "twink", "guild", "raid", "party", "duel", "trade",
+}
+
+def _looks_code_switched(source_text, translated_text, min_len=4):
+    """True if translated_text contains an English word EMBEDDED in non-Latin
+    script (non-Latin char immediately before AND after, no spaces) that was
+    present in source_text and is not on the preserve list. Catches small-LLM
+    code-switching like '是的，现在everything都很贵。' while sparing legit
+    mixed chat such as '我喜欢Star Wars。'."""
+    if not source_text or not translated_text:
+        return False
+    # Only meaningful when the translation is mostly non-Latin (zh/ja/ko/ru).
+    if not re.search(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff]", translated_text):
+        return False
+    src_words = set(w.lower() for w in re.findall(r"[A-Za-z']+", source_text))
+    for m in re.finditer(r"[A-Za-z']+", translated_text):
+        wl = m.group(0).lower()
+        if len(wl) < min_len or wl in _PRESERVE_TERMS or wl not in src_words:
+            continue
+        s, e = m.start(), m.end()
+        if s == 0 or e >= len(translated_text):
+            continue  # at string edge -> not embedded
+        before, after = translated_text[s - 1], translated_text[e]
+        if (ord(before) > 0x2FFF and not before.isascii()
+                and ord(after) > 0x2FFF and not after.isascii()):
+            return True
+    return False
+
+
 def translate(text, from_lang, to_lang, backends):
     """Tries backends in order; returns (result_text, None) on success or (None, err_msg)."""
     if not text or not text.strip():
         return "", None
-    
+
     last_err = "No backends configured"
+    fallback_result = None  # best suspect result, used only if nothing better
     for backend in backends:
         btype = backend.get("type", "?").lower()
         fn = BACKEND_FNS.get(btype)
@@ -601,6 +708,14 @@ def translate(text, from_lang, to_lang, backends):
                 result = re.sub(r"'\s+(\w)", r"'\1", result)
                 # Sanitize wire format separator | to /
                 result = result.replace("|", "/")
+                # Code-switching sanity pass (LLM backends only): if the output
+                # left ordinary source words untranslated, prefer another backend.
+                if btype in ("ollama", "openai", "gemini", "deepl") and _looks_code_switched(text, result):
+                    print(f"[translate] [{btype}] suspected code-switching (untranslated English word), trying next backend")
+                    if fallback_result is None:
+                        fallback_result = result
+                    last_err = f"{btype}: suspected code-switching"
+                    continue
                 # Formatted log with clean length limit
                 t_disp = (text[:50] + "...") if len(text) > 50 else text
                 r_disp = (result[:50] + "...") if len(result) > 50 else result
@@ -610,7 +725,14 @@ def translate(text, from_lang, to_lang, backends):
             last_err = f"{btype}: {e}"
             print(f"[translate] [{btype}] failed: {e}")
             continue
-            
+
+    # Nothing clean came back; use the least-bad suspect translation rather than failing.
+    if fallback_result is not None:
+        t_disp = (text[:50] + "...") if len(text) > 50 else text
+        r_disp = (fallback_result[:50] + "...") if len(fallback_result) > 50 else fallback_result
+        print(f"[translate] all backends suspected code-switching; using best attempt: '{r_disp}' (src: '{t_disp}')")
+        return fallback_result, None
+
     return None, f"All translation backends failed ({last_err})"
 
 # ---------------------------------------------------------------------------
@@ -696,6 +818,10 @@ def _worker(db_path, backends, ipc_targets):
 def _write_ipc_result(req_id, status, body, ipc_targets):
     if status == "ok" and body:
         body = body.replace("|", "/")
+    # Wire format is single-line "status|body": flatten any newlines/control
+    # chars that a backend could return inside the translation.
+    if body:
+        body = "".join(ch if ord(ch) >= 0x20 else " " for ch in body)
     for ipc_root in ipc_targets:
         is_imports = os.path.basename(ipc_root).lower() == "imports"
         if is_imports:
@@ -837,7 +963,13 @@ def parse_request_file(content):
     parts = content.split("|", 2)
     if len(parts) < 3:
         raise ValueError(f"Malformed request line: '{content}'")
-    return parts[0], parts[1], parts[2]
+    from_lang, to_lang, text = parts[0], parts[1], parts[2]
+    # Language codes must be simple codes (en, zh, pt-br...): anything else
+    # could carry '|' or newlines that shift wire-format parsing downstream.
+    lang_re = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$")
+    if not lang_re.match(from_lang.strip()) or not lang_re.match(to_lang.strip()):
+        raise ValueError(f"Invalid language code(s): '{from_lang}|{to_lang}'")
+    return from_lang.strip(), to_lang.strip(), text
 
 def ipc_scanner(ipc_targets, db_path, backends, cfg):
     stale_ttl = cfg.get("stale_ttl", 60)
@@ -910,8 +1042,13 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                     continue
 
                 if age > stale_ttl:
-                    _safe_delete(req_path)
-                    unmark_in_flight(req_path)
+                    # Do not delete while a worker holds this request: stacked
+                    # backend timeouts can exceed stale_ttl, and deleting here
+                    # loses/duplicates the request. The worker's finally block
+                    # cleans it up instead.
+                    if req_path not in _in_flight:
+                        _safe_delete(req_path)
+                        unmark_in_flight(req_path)
                     continue
 
                 if not mark_in_flight(req_path):
@@ -985,6 +1122,10 @@ def main():
 
     for target in ipc_targets:
         ensure_ipc_dirs(target)
+
+    # Startup hygiene: silently drop cached translations with code-switching
+    # artifacts so users who received bad entries get clean re-translations.
+    cache_purge_code_switched(db_path)
 
     backends = cfg.get("backends", [])
     workers = cfg.get("workers", 4)

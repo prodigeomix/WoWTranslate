@@ -24,15 +24,28 @@ WoWTranslateCacheCounter = WoWTranslateCacheCounter or 0
 local cacheHits = 0
 local cacheMisses = 0
 
+-- Build a cache key that includes the language direction so switching
+-- incoming/outgoing target languages never serves stale wrong-direction hits.
+local function CacheKey(text)
+    local db = WoWTranslateDB or {}
+    -- The addon translates in two directions: incoming (X->incomingToLang) and
+    -- outgoing (outgoingFromLang->Y). Key by both effective targets so each
+    -- direction keeps its own entries and a language switch never serves
+    -- wrong-direction stale hits.
+    local to = tostring(tostring(db.incomingToLang or "?") .. "/" .. tostring(db.outgoingToLang or "?"))
+    return to .. "|" .. text
+end
+
 -- Check if a translation exists in cache.
 -- Also bumps the entry's timestamp so frequently-used entries survive eviction.
 function WoWTranslate_CacheGet(text)
-    if WoWTranslateCache[text] then
+    local key = CacheKey(text)
+    if WoWTranslateCache[key] then
         cacheHits = cacheHits + 1
         -- Refresh LRU position so hot entries survive eviction.
         WoWTranslateCacheCounter = WoWTranslateCacheCounter + 1
-        WoWTranslateCacheOrder[text] = WoWTranslateCacheCounter
-        return WoWTranslateCache[text], true
+        WoWTranslateCacheOrder[key] = WoWTranslateCacheCounter
+        return WoWTranslateCache[key], true
     end
     cacheMisses = cacheMisses + 1
     return nil, false
@@ -41,10 +54,11 @@ end
 -- Save a translation to cache.  Triggers LRU eviction if over the cap.
 function WoWTranslate_CacheSave(text, translation)
     if text and translation and text ~= "" and translation ~= "" then
-        local isNew = (WoWTranslateCache[text] == nil)
-        WoWTranslateCache[text] = translation
+        local key = CacheKey(text)
+        local isNew = (WoWTranslateCache[key] == nil)
+        WoWTranslateCache[key] = translation
         WoWTranslateCacheCounter = WoWTranslateCacheCounter + 1
-        WoWTranslateCacheOrder[text] = WoWTranslateCacheCounter
+        WoWTranslateCacheOrder[key] = WoWTranslateCacheCounter
         if isNew then
             WoWTranslate_CacheMaybeEvict()
         end

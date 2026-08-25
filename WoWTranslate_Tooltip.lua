@@ -32,7 +32,7 @@ function WT_RgbHex(colorOrR, g, b, a)
     if gr > 1 then gr = 1 elseif gr < 0 then gr = 0 end
     if bl > 1 then bl = 1 elseif bl < 0 then bl = 0 end
     if al > 1 then al = 1 elseif al < 0 then al = 0 end
-    return string.format("|c%02x%02x%02x%02x", al*255, r*255, gr*255, bl*255)
+    return string.format("|c%02x%02x%02x%02x", math.floor(al*255 + 0.5), math.floor(r*255 + 0.5), math.floor(gr*255 + 0.5), math.floor(bl*255 + 0.5))
 end
 
 function WT_ApplyNameCapitalization(name)
@@ -1072,19 +1072,31 @@ end
 
 
 local wtNameplateGuildByPlayer = {}
+local WT_GUILD_MAP_CAP = 500
+
+local function GuildMapInsert(rawName, guild)
+    -- Simple size cap: clear the whole map when it grows unbounded over a
+    -- long session (entries are cheap to re-resolve).
+    local n = 0
+    for _ in pairs(wtNameplateGuildByPlayer) do n = n + 1 end
+    if n >= WT_GUILD_MAP_CAP then
+        wtNameplateGuildByPlayer = {}
+    end
+    wtNameplateGuildByPlayer[rawName] = guild
+end
 
 function WT_LookupRawGuildForNameplate(rawName)
     if not rawName or rawName == "" then return nil end
     if wtNameplateGuildByPlayer[rawName] then return wtNameplateGuildByPlayer[rawName] end
     if ShaguPlates_playerDB and ShaguPlates_playerDB[rawName] then
         local g = ShaguPlates_playerDB[rawName].guild
-        if g and g ~= "" then wtNameplateGuildByPlayer[rawName] = g; return g end
+        if g and g ~= "" then GuildMapInsert(rawName, g); return g end
     end
     local unit = WT_FindPlayerUnitByName(rawName)
     if unit and GetGuildInfo then
         local ok, guild = pcall(GetGuildInfo, unit)
         if ok and guild and guild ~= "" then
-            wtNameplateGuildByPlayer[rawName] = guild; return guild
+            GuildMapInsert(rawName, guild); return guild
         end
     end
     return nil

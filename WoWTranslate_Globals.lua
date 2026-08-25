@@ -21,6 +21,7 @@ WT_translationErrWarnShown = false
 WT_hookCallCount = 0         -- incremented every time any hook body executes
 
 WT_pendingMessages = {}
+WT_pendingKeyCounter = 0  -- monotonic counter preventing pending-key collisions
 WT_messageCounter = 0
 
 -- Maps capturedArg1 (raw message text) -> {frame -> true}

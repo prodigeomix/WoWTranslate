@@ -6,6 +6,8 @@ __pycache__/
 # Local SQLite databases & IPC runtime files
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 translations.db
 IPC/requests/*
 !IPC/requests/.gitkeep
