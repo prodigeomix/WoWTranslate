@@ -707,6 +707,61 @@ WoWTranslateOutGlossary["klz"] = "KLZ地穴"
 WoWTranslateOutGlossary["sg"] = "时光之穴"
 
 -- ============================================================================
+-- TURTLE WOW 1.18.1 CUSTOM ZONES, TENTS & GAMEPLAY (EN -> ZH)
+-- ============================================================================
+-- Survival & Rested XP Tents
+WoWTranslateOutGlossary["tent"] = "帐篷"
+WoWTranslateOutGlossary["tents"] = "帐篷"
+WoWTranslateOutGlossary["pitch tent"] = "搭帐篷"
+WoWTranslateOutGlossary["rested xp"] = "双倍经验"
+WoWTranslateOutGlossary["campfire"] = "营火"
+WoWTranslateOutGlossary["survival"] = "生存技能"
+
+-- Turtle Custom Zones & Raids
+WoWTranslateOutGlossary["tel'abim"] = "泰拉比姆"
+WoWTranslateOutGlossary["karazhan crypts"] = "卡拉赞地穴"
+WoWTranslateOutGlossary["lapidis isle"] = "拉皮迪斯岛"
+WoWTranslateOutGlossary["gillijim's isle"] = "吉利吉姆岛"
+WoWTranslateOutGlossary["bloodmoon isle"] = "血月岛"
+WoWTranslateOutGlossary["blackstone span"] = "黑石桥"
+WoWTranslateOutGlossary["hateforge quarry"] = "恨铸采石场"
+WoWTranslateOutGlossary["emerald sanctum"] = "翡翠圣殿"
+WoWTranslateOutGlossary["crescent grove"] = "新月林地"
+WoWTranslateOutGlossary["gilneas city"] = "吉尔尼斯城"
+WoWTranslateOutGlossary["high elf"] = "高等精灵"
+WoWTranslateOutGlossary["transmog"] = "幻化"
+WoWTranslateOutGlossary["turtle coin"] = "乌龟币"
+WoWTranslateOutGlossary["fashion coin"] = "时尚币"
+WoWTranslateOutGlossary["portable meeting stone"] = "便携集合石"
+
+-- Custom Modes
+WoWTranslateOutGlossary["turtle mode"] = "龟速模式"
+WoWTranslateOutGlossary["hardcore mode"] = "硬核模式"
+WoWTranslateOutGlossary["war mode"] = "战争模式"
+WoWTranslateOutGlossary["boar mode"] = "野猪模式"
+WoWTranslateOutGlossary["artisan mode"] = "工匠模式"
+WoWTranslateOutGlossary["inferno mode"] = "地狱模式"
+WoWTranslateOutGlossary["vagrant's endeavor"] = "流浪汉模式"
+
+-- Gameplay & Slang
+WoWTranslateOutGlossary["self-reliant"] = "自强"
+WoWTranslateOutGlossary["spellcleave"] = "AA队"
+WoWTranslateOutGlossary["aoe group"] = "AA队"
+WoWTranslateOutGlossary["dungeon boost"] = "带刷"
+WoWTranslateOutGlossary["tribute run"] = "贡品"
+WoWTranslateOutGlossary["mount run"] = "刷马"
+WoWTranslateOutGlossary["full clear"] = "全通"
+WoWTranslateOutGlossary["speed run"] = "速刷"
+WoWTranslateOutGlossary["healthstone"] = "发糖"
+WoWTranslateOutGlossary["summon"] = "拉人"
+WoWTranslateOutGlossary["combat res"] = "战复"
+WoWTranslateOutGlossary["divine intervention"] = "干涉"
+WoWTranslateOutGlossary["world buff"] = "世界buff"
+WoWTranslateOutGlossary["world buffs"] = "世界buff"
+WoWTranslateOutGlossary["leave party"] = "退队"
+WoWTranslateOutGlossary["join party"] = "进组"
+
+-- ============================================================================
 -- OUTGOING GLOSSARY LOOKUP FUNCTIONS
 -- ============================================================================
 
