@@ -90,13 +90,10 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
             return
         end
 
-        -- Check incoming glossary
+        -- Check incoming exact glossary
         local glossaryResult = nil
         if WoWTranslate_CheckGlossaryExact then
             glossaryResult = WoWTranslate_CheckGlossaryExact(testText)
-            if not glossaryResult and WoWTranslate_CheckGlossaryPartial then
-                glossaryResult = WoWTranslate_CheckGlossaryPartial(testText)
-            end
         end
 
         if glossaryResult then
@@ -263,16 +260,10 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
             end
             if WoWTranslate_CheckOutGlossaryExact then
                 glossaryResult = WoWTranslate_CheckOutGlossaryExact(textToTranslate)
-                if not glossaryResult and WoWTranslate_CheckOutGlossaryPartial then
-                    glossaryResult = WoWTranslate_CheckOutGlossaryPartial(textToTranslate)
-                end
             end
         else
             if WoWTranslate_CheckGlossaryExact then
                 glossaryResult = WoWTranslate_CheckGlossaryExact(textToTranslate)
-                if not glossaryResult and WoWTranslate_CheckGlossaryPartial then
-                    glossaryResult = WoWTranslate_CheckGlossaryPartial(textToTranslate)
-                end
             end
         end
 

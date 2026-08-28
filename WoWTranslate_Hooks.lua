@@ -412,9 +412,31 @@ local function SafeUTF8Truncate(str, maxBytes)
         return WT_SafeUTF8Truncate(str, maxBytes)
     end
     if not str then return "" end
+    if not maxBytes or maxBytes <= 0 then return "" end
     local len = string.len(str)
     if len <= maxBytes then return str end
-    return string.sub(str, 1, maxBytes)
+
+    local cut = maxBytes
+    local back = 0
+    while cut > 0 and back < 4 do
+        local b = string.byte(str, cut)
+        if b < 128 then
+            return string.sub(str, 1, cut)
+        elseif b >= 192 then
+            local needed = (b >= 240 and 3) or (b >= 224 and 2) or 1
+            if back == needed then
+                return string.sub(str, 1, cut + back)
+            else
+                if cut <= 1 then return "" end
+                return string.sub(str, 1, cut - 1)
+            end
+        else
+            cut = cut - 1
+            back = back + 1
+        end
+    end
+    if cut <= 0 then return "" end
+    return string.sub(str, 1, cut)
 end
 
 local function WT_ChatFrame_AddMessage_Hook(self, text, r, g, b, id, holdTime)
@@ -996,8 +1018,9 @@ function WT_HookedSendChatMessage(msg, chatType, language, channel)
         if translation then
             WT_DebugLog("Outgoing translation received:", translation)
 
-            -- Reconstruct message with original hyperlinks
-            local reconstructed = WT_ReconstructMessage(queued.segments, translation)
+            -- Sanitize backend-derived translation before reconstructing with original hyperlinks
+            local safeTranslation = WT_SanitizeDisplayText and WT_SanitizeDisplayText(translation) or translation
+            local reconstructed = WT_ReconstructMessage(queued.segments, safeTranslation)
             WT_DebugLog("Outgoing reconstructed:", reconstructed)
 
             -- Dual-language mode: include both translation and original text
