@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Turtle WoW Community Discord
+    url: https://discord.gg/turtlewow
+    about: Ask questions and discuss with the Turtle WoW community.
+  - name: WoWTranslate Discussions & Releases
+    url: https://github.com/prodigeomix/WoWTranslate/releases
+    about: View latest releases and changelogs.

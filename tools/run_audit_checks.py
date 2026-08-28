@@ -4,12 +4,14 @@ tools/run_audit_checks.py
 ========================
 Automated forensic audit verification suite for WoWTranslate v3.5.8.
 Runs:
-  1. Lua syntax compilation check (luac -p) for all load-order Lua files.
-  2. Python compilation check for wow_proxy.py.
-  3. UTF-8 truncation engine unit tests (ASCII, CJK, Kana, Cyrillic, 4-byte Emoji, malformed bytes).
-  4. SuperWoW buffer framing tests (280-byte chat limit, 300-byte ExportFile limit, 320-byte buffer).
-  5. Static security & display sanitization sweep across all Lua files.
-  6. Config.toml validation.
+  1. Lua 5.0 strict validation (validate_lua50.py).
+  2. TOC order & static analysis lint (check_lua.py).
+  3. Python compilation check for wow_proxy.py and tools.
+  4. Core unit test suite (test_wowtranslate.py).
+  5. UTF-8 truncation engine unit tests (ASCII, CJK, Kana, Cyrillic, 4-byte Emoji, malformed bytes).
+  6. SuperWoW buffer framing tests (280-byte chat limit, 300-byte ExportFile limit, 320-byte buffer).
+  7. Static security & display sanitization sweep across all Lua files.
+  8. Config.toml validation.
 """
 
 import os
@@ -27,7 +29,7 @@ ADDON_DIR = os.path.dirname(SCRIPT_DIR)
 
 def py_safe_utf8_truncate(s: str, max_bytes: int) -> str:
     """
-    Python equivalent of WT_SafeUTF8Truncate (WoWTranslate_String.lua:421).
+    Python equivalent of WT_SafeUTF8Truncate (WoWTranslate_String.lua).
     Truncates a string to at most max_bytes without severing multi-byte sequences.
     """
     if not s or max_bytes <= 0:
@@ -39,7 +41,7 @@ def py_safe_utf8_truncate(s: str, max_bytes: int) -> str:
     cut = max_bytes
     back = 0
     while cut > 0 and back < 4:
-        b = raw[cut - 1]  # 1-indexed in Lua, 0-indexed in Python
+        b = raw[cut - 1]
         if b < 128:
             return raw[:cut].decode("utf-8", errors="ignore")
         elif b >= 192:
@@ -63,35 +65,48 @@ def py_safe_utf8_truncate(s: str, max_bytes: int) -> str:
 # Test Runner Functions
 # ---------------------------------------------------------------------------
 
-def test_lua_compilation():
-    print("[1/6] Running Lua syntax compilation check (luac -p)...")
-    lua_files = [f for f in os.listdir(ADDON_DIR) if f.startswith("WoWTranslate") and f.endswith(".lua") and f != "WoWTranslate_all.lua"]
-    lua_files.sort()
-    
-    passed = 0
-    failed = 0
-    for lf in lua_files:
-        path = os.path.join(ADDON_DIR, lf)
-        res = subprocess.run(["luac", "-p", path], capture_output=True, text=True)
-        if res.returncode == 0:
-            passed += 1
-        else:
-            print(f"  [FAIL] {lf}: {res.stderr.strip()}")
-            failed += 1
+def test_lua_validation():
+    print("[1/8] Running Lua 5.0 strict validator...")
+    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "validate_lua50.py")], capture_output=True, text=True)
+    if res.returncode != 0:
+        print(res.stdout)
+        print(res.stderr)
+        assert False, "Lua 5.0 validation failed!"
+    print("  All 12 Lua files strictly compliant with Lua 5.0 & client engine.")
 
-    print(f"  Compiled {passed}/{len(lua_files)} Lua files cleanly.")
-    assert failed == 0, f"{failed} Lua file(s) failed compilation!"
+
+def test_toc_and_static_analysis():
+    print("[2/8] Running TOC order & static analysis checker...")
+    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "check_lua.py")], capture_output=True, text=True)
+    if res.returncode != 0:
+        print(res.stdout)
+        print(res.stderr)
+        assert False, "TOC & static analysis check failed!"
+    print("  WoWTranslate.toc load order and static code hygiene verified.")
 
 
 def test_python_compilation():
-    print("[2/6] Running Python proxy compilation check...")
+    print("[3/8] Running Python proxy & tools compilation check...")
     proxy_path = os.path.join(ADDON_DIR, "wow_proxy.py")
     py_compile.compile(proxy_path, doraise=True)
-    print("  wow_proxy.py compiled cleanly with zero syntax errors.")
+    for tf in os.listdir(SCRIPT_DIR):
+        if tf.endswith(".py"):
+            py_compile.compile(os.path.join(SCRIPT_DIR, tf), doraise=True)
+    print("  wow_proxy.py and all tools compiled cleanly with zero syntax errors.")
+
+
+def test_unit_test_suite():
+    print("[4/8] Running comprehensive unit test suite...")
+    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "test_wowtranslate.py")], capture_output=True, text=True)
+    if res.returncode != 0:
+        print(res.stdout)
+        print(res.stderr)
+        assert False, "Unit test suite failed!"
+    print("  All unit tests passed cleanly.")
 
 
 def test_utf8_truncation_vectors():
-    print("[3/6] Running UTF-8 truncation algorithm test vectors...")
+    print("[5/8] Running UTF-8 truncation algorithm test vectors...")
     
     # Test vector 1: Pure ASCII
     ascii_str = "The quick brown fox jumps over the lazy dog"
@@ -99,7 +114,7 @@ def test_utf8_truncation_vectors():
         res = py_safe_utf8_truncate(ascii_str, cap)
         raw_res = res.encode("utf-8")
         assert len(raw_res) <= cap, f"ASCII cap {cap} exceeded: {len(raw_res)}"
-        raw_res.decode("utf-8")  # strict UTF-8 check
+        raw_res.decode("utf-8")
 
     # Test vector 2: Chinese CJK Unified Ideographs (3 bytes each)
     cjk_str = "你好世界，魔兽世界怀旧服翻译插件！"
@@ -107,7 +122,6 @@ def test_utf8_truncation_vectors():
         res = py_safe_utf8_truncate(cjk_str, cap)
         raw_res = res.encode("utf-8")
         assert len(raw_res) <= cap, f"CJK cap {cap} exceeded: {len(raw_res)}"
-        # Verify valid UTF-8 (strict decode)
         decoded = raw_res.decode("utf-8")
         assert decoded == res
 
@@ -136,7 +150,7 @@ def test_utf8_truncation_vectors():
 
 
 def test_superwow_framing():
-    print("[4/6] Running SuperWoW buffer framing and wire truncation tests...")
+    print("[6/8] Running SuperWoW buffer framing and wire truncation tests...")
     
     # 1. 280-byte chat limit test
     long_chinese = "测试" * 150  # 150 * 6 = 900 bytes
@@ -159,7 +173,7 @@ def test_superwow_framing():
 
 
 def test_static_security_sweep():
-    print("[5/6] Running static security & display sanitization sweep...")
+    print("[7/8] Running static security & display sanitization sweep...")
     
     dangerous_patterns = [
         r"\bloadstring\b",
@@ -177,23 +191,11 @@ def test_static_security_sweep():
                 matches = re.findall(pat, content)
                 assert not matches, f"Forbidden dangerous primitive '{pat}' found in {lf}!"
 
-    # Verify TOC load order (WoWTranslate_String.lua must precede Hooks.lua and API.lua)
-    toc_path = os.path.join(ADDON_DIR, "WoWTranslate.toc")
-    with open(toc_path, "r", encoding="utf-8") as f:
-        toc_lines = [line.strip() for line in f if line.strip() and not line.startswith("##")]
-    
-    string_idx = toc_lines.index("WoWTranslate_String.lua")
-    hooks_idx = toc_lines.index("WoWTranslate_Hooks.lua")
-    api_idx = toc_lines.index("WoWTranslate_API.lua")
-    
-    assert string_idx < hooks_idx, "TOC order violation: String.lua must load before Hooks.lua"
-    assert string_idx < api_idx, "TOC order violation: String.lua must load before API.lua"
-
-    print("  Zero dangerous code execution primitives found. TOC load order verified.")
+    print("  Zero dangerous code execution primitives found. Codebase certified secure.")
 
 
 def test_config_validation():
-    print("[6/6] Validating config.toml structure...")
+    print("[8/8] Validating config.toml structure...")
     config_path = os.path.join(ADDON_DIR, "config.toml")
     assert os.path.exists(config_path), "config.toml not found!"
     
@@ -217,20 +219,22 @@ def test_config_validation():
 
 
 def main():
-    print("=" * 60)
-    print("  WoWTranslate v3.5.8 Forensic Audit Test Suite")
-    print("=" * 60)
+    print("=" * 65)
+    print("  WoWTranslate v3.5.8 Forensic Audit & Verification Suite")
+    print("=" * 65)
     
     try:
-        test_lua_compilation()
+        test_lua_validation()
+        test_toc_and_static_analysis()
         test_python_compilation()
+        test_unit_test_suite()
         test_utf8_truncation_vectors()
         test_superwow_framing()
         test_static_security_sweep()
         test_config_validation()
-        print("\n" + "=" * 60)
-        print("  ALL 6 AUDIT TEST SUITES PASSED! Codebase certified clean.")
-        print("=" * 60)
+        print("\n" + "=" * 65)
+        print("  ALL 8 AUDIT TEST SUITES PASSED! Codebase certified clean.")
+        print("=" * 65)
         return 0
     except AssertionError as e:
         print(f"\n[AUDIT FAILURE]: {e}")

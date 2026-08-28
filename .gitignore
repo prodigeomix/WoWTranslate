@@ -2,6 +2,16 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
 
 # Local SQLite databases & IPC runtime files
 *.db
@@ -27,6 +37,8 @@ config.local.toml
 # OS generated files
 .DS_Store
 Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
 
 # Temporary bundles & patch files
 WoWTranslate_all.lua

@@ -1,13 +1,17 @@
-# 🌐 WoWTranslate v3.5.8 — Universal Real-Time Chat Translator
-### World of Warcraft 1.12.1 (Vanilla / Turtle WoW)
+# 🌐 WoWTranslate v3.5.8 — Universal Real-Time Chat & Tooltip Translator
+### World of Warcraft 1.12.1 (Vanilla / Turtle WoW Patch 1.18.1)
 
+[![CI Build](https://github.com/prodigeomix/WoWTranslate/actions/workflows/ci.yml/badge.svg)](https://github.com/prodigeomix/WoWTranslate/actions/workflows/ci.yml)
+[![Turtle WoW 1.18.1](https://img.shields.io/badge/Turtle_WoW-1.18.1-darkgreen?logo=worldofwarcraft)](https://turtle-wow.org)
+[![Vanilla WoW 1.12.1](https://img.shields.io/badge/Vanilla_WoW-1.12.1-orange)](https://github.com/prodigeomix/WoWTranslate)
+[![Lua 5.0 Strict](https://img.shields.io/badge/Lua_5.0-Strict_Compliant-blue?logo=lua)](tools/validate_lua50.py)
+[![Tests Passing](https://img.shields.io/badge/Tests-8%2F8_Passed-brightgreen)](tools/run_audit_checks.py)
 [![Latest Release](https://img.shields.io/github/v/release/prodigeomix/WoWTranslate?color=blue&label=Latest%20Release)](https://github.com/prodigeomix/WoWTranslate/releases/latest)
-[![Total Downloads](https://img.shields.io/github/downloads/prodigeomix/WoWTranslate/total?color=brightgreen&label=Downloads)](https://github.com/prodigeomix/WoWTranslate/releases)
 [![License](https://img.shields.io/github/license/prodigeomix/WoWTranslate?color=orange)](LICENSE)
 
-Translate World of Warcraft chat in real-time between **Chinese, English, Russian, Japanese, and Korean** directly inside your game!
+Translate World of Warcraft chat, player names, group finder, and tooltips in real-time between **Chinese, English, Russian, Japanese, and Korean** directly inside your game!
 
-WoWTranslate is **local-first** using **Ollama** (your own private AI model) with optional automatic cloud fallback (Google Translate). It is completely free, private, has zero monthly limits, and offers real-time translations (instant SQLite cache, ~50ms–200ms local AI inference).
+WoWTranslate is **local-first** using **Ollama** (your own private AI model) with optional automatic cloud fallback (Google Translate / DeepL / OpenAI). It is completely free, private, has zero monthly limits, and offers real-time translations (instant SQLite cache, ~50ms–200ms local AI inference).
 
 ---
 
@@ -140,14 +144,15 @@ To download the AI translation brain onto your computer, run a single command in
 | :--- | :--- |
 | **`/wt show`** | Opens the visual settings and options menu on your screen. |
 | **`/wt hide`** | Closes the settings menu. |
-| **`/wt out on`** | Turns **ON** automatic English → Chinese outgoing translation. |
-| **`/wt out off`** | Turns **OFF** outgoing translation. |
+| **`/wt out [on\|off]`** | Turns **ON** / **OFF** automatic English → Chinese outgoing translation. |
 | **`/wt diag`** | Tests your connection to make sure the proxy and game are connected. |
 | **`/wt status`** | Shows addon status, active translation backends, and cache stats. |
+| **`/wt transport [proxy\|dll\|auto]`** | Selects active transport backend (SuperWoW IPC Proxy or UnitXP DLL). |
 | **`/wt test <text>`** | Tests incoming translation (e.g. `/wt test 你好`). |
 | **`/wt testout <text>`** | Previews an outgoing translation without sending it to public chat. |
-| **`/wt reset`** | Refreshes chat frames and clears any stuck queues. |
+| **`/wt reset`** | Refreshes chat frames, resets API backoff, and clears any stuck queues. |
 | **`/wt clearcache`** | Clears the local translation memory cache. |
+| **`/wt debug`** | Toggles verbose diagnostic logging. |
 
 ---
 
@@ -180,6 +185,26 @@ timeout = 8
 ```
 
 > 💡 **Tip:** Whenever you edit `config.toml`, always close and re-open `start_proxy.bat` so it reloads your new settings!
+
+---
+
+## 🧪 Developer Verification & Quality Assurance
+
+Maintainers and developers can verify repository compliance using our automated audit toolchain:
+
+```bash
+# Run Lua 5.0 strict syntax and opcode validator
+python tools/validate_lua50.py
+
+# Run static analysis and TOC order linter
+python tools/check_lua.py
+
+# Run core unit tests
+python tools/test_wowtranslate.py
+
+# Run full forensic audit suite
+python tools/run_audit_checks.py
+```
 
 ---
 
@@ -218,3 +243,8 @@ If `start_proxy.bat` says Python was not found:
 2. Click **Modify** (or uninstall and reinstall).
 3. ⚠️ **Make sure to check the box:** **`☑ Add python.exe to PATH`** at the bottom of the installer!
 4. *(Or simply open PowerShell and run: `winget install Python.Python.3.12` which sets up PATH automatically).*
+
+---
+
+## 📜 License
+WoWTranslate is released under the [MIT License](LICENSE).

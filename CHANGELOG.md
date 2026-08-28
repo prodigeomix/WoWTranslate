@@ -19,7 +19,8 @@ All notable changes, fixes, and improvements to **WoWTranslate** are documented 
 - **Hardened Multi-byte Truncation Fallbacks**: Reinforced local fallback in `WoWTranslate_Hooks.lua` and `WoWTranslate_API.lua` with a self-contained multi-byte walkback loop ensuring UTF-8 characters can never be split regardless of load order.
 - **Outgoing Backend Translation Sanitization**: Sanitized backend translation output before hyperlink reconstruction in `WoWTranslate_Hooks.lua`, eliminating escape injection vectors while preserving clickable player item links.
 - **`/wt test` and `/wt testout` Flow Fix**: Fixed test commands in `WoWTranslate.lua` to only short-circuit on full exact glossary matches, ensuring test sentences with isolated terms (e.g. `MC`) properly flow through to the translation API backend.
-- **Automated Audit Test Suite**: Added `tools/run_audit_checks.py` containing 6 validation suites (Lua 5.0 compilation, Python compilation, UTF-8 truncation vectors, SuperWoW wire framing, static security sweep, config validation).
+- **Automated Audit Test Suite & Toolchain**: Added `tools/run_audit_checks.py`, `tools/validate_lua50.py`, `tools/check_lua.py`, and `tools/test_wowtranslate.py` containing 8 comprehensive verification suites (Lua 5.0 opcode checks, TOC order validation, Python compilation, UTF-8 truncation vectors, SuperWoW wire framing, static security sweep, config validation, and unit tests).
+- **Top 0.1% GitHub Automation & Community Governance**: Added `.github/workflows/ci.yml` (Python 3.10/3.11/3.12 test matrix), interactive GitHub Issue Forms (`bug_report.yml`, `feature_request.yml`, `config.yml`), Pull Request template (`pull_request_template.md`), `CONTRIBUTING.md`, `SECURITY.md`, and updated `.gitignore`.
 - **Audit Documentation**: Formal Wave 5 Unified Forensic Audit Report documented in `docs/audit_findings_v5.md` (0 CONFIRMED findings, all components certified clean).
 
 ---

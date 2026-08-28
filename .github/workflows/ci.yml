@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Forensic Audit & Test Suite (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Lua 5.0 / Luac Compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1
+          # Create luac symlink if needed
+          if command -v luac5.1 &> /dev/null; then
+            sudo ln -sf $(which luac5.1) /usr/local/bin/luac
+          fi
+
+      - name: Run Lua 5.0 Strict Compliance Validator
+        run: python tools/validate_lua50.py
+
+      - name: Run Static Analysis & TOC Order Linter
+        run: python tools/check_lua.py
+
+      - name: Run Core Unit Test Suite
+        run: python tools/test_wowtranslate.py
+
+      - name: Run Full Forensic Audit Verification Suite
+        run: python tools/run_audit_checks.py

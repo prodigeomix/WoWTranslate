@@ -1,0 +1,84 @@
+name: Bug Report
+description: Report an issue, error, or unexpected behavior in WoWTranslate
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue! Please provide as much detail as possible so we can diagnose and resolve it quickly.
+
+  - type: checkboxes
+    id: environment
+    attributes:
+      label: Client & Engine Environment
+      description: Check all applicable client extensions and environments in your setup.
+      options:
+        - label: Turtle WoW Patch 1.18.1
+          required: false
+        - label: Vanilla WoW Client 1.12.1 (Standard / Private Server)
+          required: false
+        - label: SuperWoW Installed (ExportFile / ImportFile active)
+          required: false
+        - label: Nampower Installed
+          required: false
+        - label: UnitXP SP3 DLL Installed
+          required: false
+        - label: ShaguTweaks / pfUI / ShaguPlates Installed
+          required: false
+
+  - type: dropdown
+    id: backend_type
+    attributes:
+      label: Active Translation Backend
+      description: Which translation engine / backend are you using?
+      options:
+        - "Ollama (Local AI - qwen2.5 / qwen2.5:1.5b / etc.)"
+        - "Google Translate (Built-in Free Web Fallback)"
+        - "DeepL API"
+        - "OpenAI / Custom LLM"
+        - "Not sure / Default config.toml"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of Issue
+      description: A clear and concise description of what happened.
+      placeholder: E.g., When receiving chat in Chinese from a custom 1.18.1 zone, the translation failed with error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can maintainers reproduce this issue?
+      placeholder: |
+        1. Start start_proxy.bat
+        2. In game, type '/wt test ...' or send chat message
+        3. Observe error in chat frame
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+      placeholder: The message should have been translated cleanly into English below the original chat.
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics & Proxy Output
+      description: Paste the output of `/wt diag`, `/wt status`, or the console output from `start_proxy.bat`.
+      render: text
+      placeholder: |
+        [proxy] Ready! Proxy is actively listening for translations.
+        /wt diag output...
+    validations:
+      required: false
