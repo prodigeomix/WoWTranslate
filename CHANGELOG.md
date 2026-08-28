@@ -7,8 +7,15 @@ All notable changes, fixes, and improvements to **WoWTranslate** are documented 
 ## [v3.5.8] - 2026-08-28
 
 ### 🔴 Critical Fixes — SuperWoW UTF-8 Truncation & Proxy Decode Crash
-- **SuperWoW Export Buffer Truncation Prevention**: Added `WT_SafeUTF8Truncate()` in `WoWTranslate_String.lua` which walks backward over multi-byte sequences (2-, 3-, and 4-byte UTF-8 sequences). Incoming chat messages are now safely capped at 280 bytes (`zh|en|` wire prefix + 280 bytes = ~290 bytes max), and `WriteRequest` in `WoWTranslate_API.lua` enforces a 300-byte cap before `ExportFile`. This prevents SuperWoW's internal 320-byte (`0x140`) buffer from ever severing multi-byte Chinese/Japanese/Korean characters mid-byte at offset 319.
+- **SuperWoW Export Buffer Truncation Prevention**: Added `WT_SafeUTF8Truncate()` in `WoWTranslate_String.lua` which walks backward over multi-byte sequences (2-, 3-, and 4-byte UTF-8 sequences). Incoming chat messages are now safely capped at 280 bytes (`zh|en|` wire prefix + 280 bytes = ~286 bytes max), and `WriteRequest` in `WoWTranslate_API.lua` enforces a 300-byte cap before `ExportFile`. This prevents SuperWoW's internal 320-byte (`0x140`) buffer from ever severing multi-byte Chinese/Japanese/Korean characters mid-byte at offset 319.
 - **Proxy Resilient Binary Intake**: Switched `wow_proxy.py` request file reading from strict text mode to binary reading (`open(req_path, "rb")`) with `decode("utf-8", errors="replace").rstrip("\ufffd")`. Eliminates `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe7 in position 319` crashes, ensuring requests are always gracefully decoded and translated even if trailing bytes were clipped.
+
+### 🟡 Wave-5 Forensic Audit & Test Suite
+- **Hardened Multi-byte Truncation Fallbacks**: Reinforced local fallback in `WoWTranslate_Hooks.lua` and `WoWTranslate_API.lua` with a self-contained multi-byte walkback loop ensuring UTF-8 characters can never be split regardless of load order.
+- **Outgoing Backend Translation Sanitization**: Sanitized backend translation output before hyperlink reconstruction in `WoWTranslate_Hooks.lua`, eliminating escape injection vectors while preserving clickable player item links.
+- **`/wt test` and `/wt testout` Flow Fix**: Fixed test commands in `WoWTranslate.lua` to only short-circuit on full exact glossary matches, ensuring test sentences with isolated terms (e.g. `MC`) properly flow through to the translation API backend.
+- **Automated Audit Test Suite**: Added `tools/run_audit_checks.py` containing 6 validation suites (Lua 5.0 compilation, Python compilation, UTF-8 truncation vectors, SuperWoW wire framing, static security sweep, config validation).
+- **Audit Documentation**: Formal Wave 5 Unified Forensic Audit Report documented in `docs/audit_findings_v5.md` (0 CONFIRMED findings, all components certified clean).
 
 ---
 
