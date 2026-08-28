@@ -1,5 +1,5 @@
 -- WoWTranslate_API.lua
--- Universal Multi-Transport API for WoWTranslate (v3.5.5)
+-- Universal Multi-Transport API for WoWTranslate (v3.5.8)
 -- Supports SuperWoW (Imports\req_*.txt), Standard Lua IO (WoWTranslate\IPC\), and UnitXP C++ DLL.
 --
 -- Transports:
@@ -82,6 +82,9 @@ end
 
 local function WriteRequest(reqId, encoded)
     if currentTransport == TRANSPORT_SUPERWOW then
+        if encoded and string.len(encoded) > 300 then
+            encoded = WT_SafeUTF8Truncate and WT_SafeUTF8Truncate(encoded, 300) or string.sub(encoded, 1, 300)
+        end
         local ok = pcall(ExportFile, "req_" .. reqId, encoded)
         return ok
     elseif currentTransport == TRANSPORT_LUAIO then

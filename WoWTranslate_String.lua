@@ -412,6 +412,50 @@ function WT_ProcessSegmentsOutgoing(segments, outFromLang)
     end
 end
 
+-- ============================================================================
+-- UTF-8 SAFE TRUNCATION
+-- ============================================================================
 
+-- Truncates a string to at most maxBytes, ensuring no multi-byte UTF-8 character
+-- sequence is severed mid-character.
+function WT_SafeUTF8Truncate(str, maxBytes)
+    if not str then return "" end
+    if not maxBytes or maxBytes <= 0 then return "" end
+    local len = string.len(str)
+    if len <= maxBytes then return str end
 
+    local cut = maxBytes
+    local back = 0
+    while cut > 0 and back < 4 do
+        local b = string.byte(str, cut)
+        if b < 128 then
+            -- ASCII byte: safe cut point
+            return string.sub(str, 1, cut)
+        elseif b >= 192 then
+            -- Leading byte of a multi-byte sequence
+            local needed = 1
+            if b >= 240 then
+                needed = 3
+            elseif b >= 224 then
+                needed = 2
+            elseif b >= 192 then
+                needed = 1
+            end
+            if back == needed then
+                -- The sequence is complete within [1 .. cut + back] (<= maxBytes)
+                return string.sub(str, 1, cut + back)
+            else
+                -- Incomplete sequence: cut before this leading byte
+                if cut <= 1 then return "" end
+                return string.sub(str, 1, cut - 1)
+            end
+        else
+            -- Continuation byte (128..191)
+            cut = cut - 1
+            back = back + 1
+        end
+    end
 
+    if cut <= 0 then return "" end
+    return string.sub(str, 1, cut)
+end

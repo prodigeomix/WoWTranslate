@@ -408,30 +408,13 @@ function WT_SafeAddMessage(func, self, text, r, g, b, id, holdTime)
 end
 
 local function SafeUTF8Truncate(str, maxBytes)
+    if WT_SafeUTF8Truncate then
+        return WT_SafeUTF8Truncate(str, maxBytes)
+    end
     if not str then return "" end
     local len = string.len(str)
     if len <= maxBytes then return str end
-
-    local nextByte = string.byte(str, maxBytes + 1)
-    if nextByte and nextByte >= 128 and nextByte <= 191 then
-        -- The cut would land in the middle of a multi-byte UTF-8 sequence.
-        -- Walk backwards until we find a leading byte (>= 192) or hit position 0.
-        local bytePos = maxBytes
-        while bytePos > 0 do
-            local b = string.byte(str, bytePos)
-            if not (b >= 128 and b <= 191) then
-                break
-            end
-            bytePos = bytePos - 1
-        end
-        -- L8 fix: guard against bytePos reaching 0 (malformed UTF-8 with
-        -- only continuation bytes up to maxBytes).  Old code returned the
-        -- full string via sub(str, 1, -1) in that case.
-        if bytePos <= 1 then return "" end
-        return string.sub(str, 1, bytePos - 1)
-    else
-        return string.sub(str, 1, maxBytes)
-    end
+    return string.sub(str, 1, maxBytes)
 end
 
 local function WT_ChatFrame_AddMessage_Hook(self, text, r, g, b, id, holdTime)
@@ -691,13 +674,9 @@ function WT_HookChatFrames(force)
                                 capturedThis.wtPendingArgs = nil
                             end
 
-                            -- C8 fix: raise the cap from 75 to 500 bytes.  The old 75-byte
-                            -- limit silently truncated longer messages and then cached the
-                            -- truncated translation under the FULL message text — so the
-                            -- truncated translation was returned forever for that key.
-                            -- We now cache under the truncated text too so a later
-                            -- occurrence of the same (truncated) prefix hits cache cleanly.
-                            textToTranslate = SafeUTF8Truncate(textToTranslate, 500)
+                            -- Cap at 280 bytes so encoded request ('zh|en|' + text) is <= 292 bytes,
+                            -- strictly fitting within SuperWoW's 320-byte ExportFile buffer.
+                            textToTranslate = SafeUTF8Truncate(textToTranslate, 280)
 
                             local apiQueued, rejectReason = WoWTranslate_API.Translate(textToTranslate, function(translation, err)
                                 if translation and translation ~= "" then

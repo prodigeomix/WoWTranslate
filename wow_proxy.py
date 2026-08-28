@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.5.7  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.5.8  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -53,7 +53,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-VERSION = "3.5.7"
+VERSION = "3.5.8"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
@@ -1057,8 +1057,9 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                     continue
 
                 try:
-                    with open(req_path, "r", encoding="utf-8") as f:
-                        content = f.read().strip()
+                    with open(req_path, "rb") as f:
+                        raw = f.read()
+                    content = raw.decode("utf-8", errors="replace").rstrip("\ufffd").strip()
                     if not content:
                         unmark_in_flight(req_path)
                         continue

@@ -4,6 +4,14 @@ All notable changes, fixes, and improvements to **WoWTranslate** are documented 
 
 ---
 
+## [v3.5.8] - 2026-08-28
+
+### 🔴 Critical Fixes — SuperWoW UTF-8 Truncation & Proxy Decode Crash
+- **SuperWoW Export Buffer Truncation Prevention**: Added `WT_SafeUTF8Truncate()` in `WoWTranslate_String.lua` which walks backward over multi-byte sequences (2-, 3-, and 4-byte UTF-8 sequences). Incoming chat messages are now safely capped at 280 bytes (`zh|en|` wire prefix + 280 bytes = ~290 bytes max), and `WriteRequest` in `WoWTranslate_API.lua` enforces a 300-byte cap before `ExportFile`. This prevents SuperWoW's internal 320-byte (`0x140`) buffer from ever severing multi-byte Chinese/Japanese/Korean characters mid-byte at offset 319.
+- **Proxy Resilient Binary Intake**: Switched `wow_proxy.py` request file reading from strict text mode to binary reading (`open(req_path, "rb")`) with `decode("utf-8", errors="replace").rstrip("\ufffd")`. Eliminates `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe7 in position 319` crashes, ensuring requests are always gracefully decoded and translated even if trailing bytes were clipped.
+
+---
+
 ## [v3.5.7] - 2026-08-25
 
 ### 🔴 Security — Chat Injection Closure (audit waves 2–3)
