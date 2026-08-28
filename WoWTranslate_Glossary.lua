@@ -1922,6 +1922,43 @@ WoWTranslateGlossary["SWV"] = "Stormwind Vault"
 WoWTranslateGlossary["swv"] = "Stormwind Vault"
 
 -- ============================================================================
+-- LFG ROLES & RECRUITMENT
+-- ============================================================================
+WoWTranslateGlossary["来TND"] = "LF Tank, Healer, DPS"
+WoWTranslateGlossary["来tnd"] = "LF Tank, Healer, DPS"
+WoWTranslateGlossary["来T N D"] = "LF Tank, Healer, DPS"
+WoWTranslateGlossary["来TN"] = "LF Tank & Healer"
+WoWTranslateGlossary["来tn"] = "LF Tank & Healer"
+WoWTranslateGlossary["来T N"] = "LF Tank & Healer"
+WoWTranslateGlossary["来TD"] = "LF Tank & DPS"
+WoWTranslateGlossary["来td"] = "LF Tank & DPS"
+WoWTranslateGlossary["来ND"] = "LF Healer & DPS"
+WoWTranslateGlossary["来nd"] = "LF Healer & DPS"
+WoWTranslateGlossary["来T"] = "LF Tank"
+WoWTranslateGlossary["来t"] = "LF Tank"
+WoWTranslateGlossary["来N"] = "LF Healer"
+WoWTranslateGlossary["来n"] = "LF Healer"
+WoWTranslateGlossary["来奶"] = "LF Healer"
+WoWTranslateGlossary["来输出"] = "LF DPS"
+WoWTranslateGlossary["来DPS"] = "LF DPS"
+WoWTranslateGlossary["来dps"] = "LF DPS"
+WoWTranslateGlossary["TND"] = "Tank, Healer, DPS"
+WoWTranslateGlossary["tnd"] = "Tank, Healer, DPS"
+WoWTranslateGlossary["TN"] = "Tank & Healer"
+WoWTranslateGlossary["tn"] = "Tank & Healer"
+WoWTranslateGlossary["TD"] = "Tank & DPS"
+WoWTranslateGlossary["td"] = "Tank & DPS"
+WoWTranslateGlossary["ND"] = "Healer & DPS"
+WoWTranslateGlossary["nd"] = "Healer & DPS"
+WoWTranslateGlossary["奶妈"] = "Healer"
+WoWTranslateGlossary["治疗"] = "Healer"
+WoWTranslateGlossary["坦克"] = "Tank"
+WoWTranslateGlossary["肉盾"] = "Tank"
+WoWTranslateGlossary["主T"] = "Main Tank"
+WoWTranslateGlossary["副T"] = "Off Tank"
+WoWTranslateGlossary["输出"] = "DPS"
+
+-- ============================================================================
 -- GLOSSARY LOOKUP FUNCTIONS
 -- ============================================================================
 

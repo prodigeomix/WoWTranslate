@@ -148,6 +148,27 @@ function WT_PreprocessIncoming(text)
         end)
     end
 
+    -- LFG Role Shorthands (来 = LF/need, T = Tank, N = Healer, D = DPS)
+    -- Multi-role combinations:
+    text = string.gsub(text, "\230\157\165%s*[tT]%s*[nN]%s*[dD]", "LF Tank Healer DPS")
+    text = string.gsub(text, "\230\157\165%s*[tT]%s*[nN]",        "LF Tank Healer")
+    text = string.gsub(text, "\230\157\165%s*[tT]%s*[dD]",        "LF Tank DPS")
+    text = string.gsub(text, "\230\157\165%s*[nN]%s*[dD]",        "LF Healer DPS")
+    -- Single roles with non-alpha boundary:
+    text = string.gsub(text, "\230\157\165%s*[tT]([^%a])",        "LF Tank%1")
+    text = string.gsub(text, "\230\157\165%s*[tT]$",               "LF Tank")
+    text = string.gsub(text, "\230\157\165%s*[nN]([^%a])",        "LF Healer%1")
+    text = string.gsub(text, "\230\157\165%s*[nN]$",               "LF Healer")
+    text = string.gsub(text, "\230\157\165%s*[dD][pP][sS]([^%a])", "LF DPS%1")
+    text = string.gsub(text, "\230\157\165%s*[dD][pP][sS]$",        "LF DPS")
+    text = string.gsub(text, "\230\157\165%s*[dD]([^%a])",        "LF DPS%1")
+    text = string.gsub(text, "\230\157\165%s*[dD]$",               "LF DPS")
+    -- Isolated TND / T N D:
+    text = string.gsub(text, "([^%w])[tT]%s*[nN]%s*[dD]([^%w])", "%1Tank/Healer/DPS%2")
+    text = string.gsub(text, "([^%w])[tT]%s*[nN]%s*[dD]$",        "%1Tank/Healer/DPS")
+    text = string.gsub(text, "^[tT]%s*[nN]%s*[dD]([^%w])",         "Tank/Healer/DPS%1")
+    text = string.gsub(text, "^[tT]%s*[nN]%s*[dD]$",               "Tank/Healer/DPS")
+
     -- 密 (mì, U+5BC6, UTF-8 \229\175\134) = "whisper" in CN WoW slang.
     -- Two context-specific cases that the static glossary cannot cover safely:
     -- compound forms (密我/来密/求密/密密/etc.) are handled by the glossary.
