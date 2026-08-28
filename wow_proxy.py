@@ -706,6 +706,9 @@ def translate(text, from_lang, to_lang, backends):
             if result:
                 # Clean up apostrophe space artifact e.g. "doesn' t" -> "doesn't"
                 result = re.sub(r"'\s+(\w)", r"'\1", result)
+                # If translating to English, strip trailing stray CJK glyph artifacts
+                if str(to_lang).lower() == "en":
+                    result = re.sub(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]+$", "", result).strip()
                 # Sanitize wire format separator | to /
                 result = result.replace("|", "/")
                 # Code-switching sanity pass (LLM backends only): if the output
