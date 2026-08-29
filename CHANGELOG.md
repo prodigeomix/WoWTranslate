@@ -4,6 +4,19 @@ All notable changes, fixes, and improvements to **WoWTranslate** are documented 
 
 ---
 
+## [v3.5.9] - 2026-08-29
+
+### 🔴 Critical Fixes — Clickable Hyperlinks in Translated Chat
+- **Hyperlink Sanitization Ordering Fix**: Restructured incoming message pipeline in `WoWTranslate_Hooks.lua` and item cache queue in `WoWTranslate_Hyperlink.lua`. The display sanitizer (`WT_SanitizeDisplayText`) now sanitizes raw backend translation text *before* hyperlink reconstruction replaces placeholders with genuine `|Hitem:...|h[Name]|h|r` sequences, rather than running across the reconstructed message. This prevents `|H` link metadata from being stripped and ensures item, quest, and player links in translated chat remain **100% clickable** in-game.
+
+### 🟢 Out-of-the-Box Configuration & Defaults
+- **Optimal Default Settings**: Preconfigured `WT_defaults` in `WoWTranslate_Globals.lua` and `WT_InitializeSettings` in `WoWTranslate.lua` to enable Player Name Translation (`translatePlayerNames = true`), Guild Name Translation (`translateGuildNames = true`), Nameplate Overlays (`translateNameplates = true`), LFT Group Finder (`translateGroupFinder = true`), and the Hardcore chat channel (`incomingChannels.HARDCORE = true`) by default. New installations immediately enjoy the full feature set without manual menu configuration.
+
+### 🟡 Proxy Reliability & Startup Hardening
+- **Batch Script Error-Handling & Pause**: Hardened `start_proxy.bat` with exit code verification (`if %ERRORLEVEL% NEQ 0 pause`). Prevents the terminal window from silently and immediately closing if Python encounters a runtime startup error, permission issue, or port conflict.
+
+---
+
 ## [v3.5.8] - 2026-08-28
 
 ### 🔴 Critical Fixes — SuperWoW UTF-8 Truncation & Proxy Decode Crash

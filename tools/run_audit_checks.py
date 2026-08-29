@@ -2,7 +2,7 @@
 """
 tools/run_audit_checks.py
 ========================
-Automated forensic audit verification suite for WoWTranslate v3.5.8.
+Automated forensic audit verification suite for WoWTranslate v3.5.9.
 Runs:
   1. Lua 5.0 strict validation (validate_lua50.py).
   2. TOC order & static analysis lint (check_lua.py).
@@ -220,7 +220,7 @@ def test_config_validation():
 
 def main():
     print("=" * 65)
-    print("  WoWTranslate v3.5.8 Forensic Audit & Verification Suite")
+    print("  WoWTranslate v3.5.9 Forensic Audit & Verification Suite")
     print("=" * 65)
     
     try:

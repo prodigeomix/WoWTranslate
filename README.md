@@ -1,4 +1,4 @@
-# 🌐 WoWTranslate v3.5.8 — Universal Real-Time Chat & Tooltip Translator
+# 🌐 WoWTranslate v3.5.9 — Universal Real-Time Chat & Tooltip Translator
 ### World of Warcraft 1.12.1 (Vanilla / Turtle WoW Patch 1.18.1)
 
 [![CI Build](https://github.com/prodigeomix/WoWTranslate/actions/workflows/ci.yml/badge.svg)](https://github.com/prodigeomix/WoWTranslate/actions/workflows/ci.yml)
@@ -108,7 +108,7 @@ To download the AI translation brain onto your computer, run a single command in
 3. A small black window will open and say:
    ```text
    ==========================================================
-      WoWTranslate Universal Proxy v3.5.8
+      WoWTranslate Universal Proxy v3.5.9
      Backends     : ['ollama', 'google']
    ==========================================================
    [proxy] Ready! Proxy is actively listening for translations.
