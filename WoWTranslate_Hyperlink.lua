@@ -520,7 +520,7 @@ function WT_ProcessItemCacheMessage(queued)
         for _, seg in ipairs(segments) do
             result = result .. seg.content
         end
-        queued.WT_originalAddMessage(queued.frame, WT_SanitizeDisplayText(result), queued.r, queued.g, queued.b, queued.id, queued.holdTime)
+        queued.WT_originalAddMessage(queued.frame, result, queued.r, queued.g, queued.b, queued.id, queued.holdTime)
         return
     end
 
@@ -529,7 +529,8 @@ function WT_ProcessItemCacheMessage(queued)
     local cached, found = WoWTranslate_CacheGet(msgBody)
     if found then
         WT_DebugLog("Cache hit for item message")
-        local finalText = headerText .. WT_SanitizeDisplayText(WT_ReconstructMessage(segments, cached))
+        local safeCached = WT_SanitizeDisplayText and WT_SanitizeDisplayText(cached) or cached
+        local finalText = headerText .. WT_ReconstructMessage(segments, safeCached)
         queued.WT_originalAddMessage(queued.frame, finalText, queued.r, queued.g, queued.b, queued.id, queued.holdTime)
         return
     end
@@ -555,12 +556,13 @@ function WT_ProcessItemCacheMessage(queued)
                 WT_pendingMessages[msgId] = nil
                 if translation and translation ~= "" then
                     WT_DebugLog("API returned for item msg:", string.sub(translation, 1, 50))
-                    local finalText = pending.headerText .. WT_SanitizeDisplayText(WT_ReconstructMessage(pending.segments, translation))
+                    local safeTranslation = WT_SanitizeDisplayText and WT_SanitizeDisplayText(translation) or translation
+                    local finalText = pending.headerText .. WT_ReconstructMessage(pending.segments, safeTranslation)
                     WoWTranslate_CacheSave(pending.msgBody, translation)
                     pcall(pending.WT_originalAddMessage, pending.frame, finalText, pending.r, pending.g, pending.b, pending.id, pending.holdTime)
                 else
                     WT_DebugLog("API error for item msg:", tostring(err))
-                    pcall(pending.WT_originalAddMessage, pending.frame, WT_SanitizeDisplayText(pending.originalText), pending.r, pending.g, pending.b, pending.id, pending.holdTime)
+                    pcall(pending.WT_originalAddMessage, pending.frame, pending.originalText, pending.r, pending.g, pending.b, pending.id, pending.holdTime)
                 end
             end
         end, detectedLang)

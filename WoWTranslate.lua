@@ -419,7 +419,7 @@ function WT_InitializeSettings()
             WoWTranslateDB.incomingChannels[k] = v
         end
     end
-    if WoWTranslateDB.incomingChannels.HARDCORE == nil then WoWTranslateDB.incomingChannels.HARDCORE = false end
+    if WoWTranslateDB.incomingChannels.HARDCORE == nil then WoWTranslateDB.incomingChannels.HARDCORE = true end
     if WoWTranslateDB.incomingChannels.ENGLISH == nil then WoWTranslateDB.incomingChannels.ENGLISH = false end
 
     if WoWTranslateDB.translationColorFollow == nil then WoWTranslateDB.translationColorFollow = true end
@@ -436,10 +436,10 @@ function WT_InitializeSettings()
         WoWTranslateDB.enabledSourceLangs.en = false
     end
 
-    if WoWTranslateDB.translatePlayerNames == nil then WoWTranslateDB.translatePlayerNames = false end
-    if WoWTranslateDB.translateGuildNames == nil then WoWTranslateDB.translateGuildNames = false end
-    if WoWTranslateDB.translateNameplates == nil then WoWTranslateDB.translateNameplates = false end
-    if WoWTranslateDB.translateGroupFinder == nil then WoWTranslateDB.translateGroupFinder = false end
+    if WoWTranslateDB.translatePlayerNames == nil then WoWTranslateDB.translatePlayerNames = true end
+    if WoWTranslateDB.translateGuildNames == nil then WoWTranslateDB.translateGuildNames = true end
+    if WoWTranslateDB.translateNameplates == nil then WoWTranslateDB.translateNameplates = true end
+    if WoWTranslateDB.translateGroupFinder == nil then WoWTranslateDB.translateGroupFinder = true end
     if WoWTranslateDB.outgoingButtonPos == nil then WoWTranslateDB.outgoingButtonPos = { x = 100, y = 100 } end
     if WoWTranslateDB.showOutgoingButton == nil then WoWTranslateDB.showOutgoingButton = true end
 end

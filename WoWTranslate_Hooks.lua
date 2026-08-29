@@ -613,8 +613,7 @@ function WT_HookChatFrames(force)
                                 if WoWTranslateDB and WoWTranslateDB.translationColorFollow then
                                     bodyHex = chanColorHex or ""
                                 end
-                                local safeBody = WT_SanitizeDisplayText and WT_SanitizeDisplayText(body) or body
-                                local displayBody = bodyHex ~= "" and ("|cFF" .. bodyHex .. safeBody .. "|r") or safeBody
+                                local displayBody = bodyHex ~= "" and ("|cFF" .. bodyHex .. body .. "|r") or body
                                 local sp = WT_BuildSenderPrefix(capturedArg2, resolvedSenderName, channel, resolvedGuildName)
                                 return prefix .. " " .. sp .. displayBody
                             end
@@ -637,7 +636,7 @@ function WT_HookChatFrames(force)
                                 for _, seg in ipairs(segments) do
                                     reconstructed = reconstructed .. seg.content
                                 end
-                                ResolveNamesAndPost(WT_SanitizeDisplayText and WT_SanitizeDisplayText(reconstructed) or reconstructed, function(wtMsg)
+                                ResolveNamesAndPost(reconstructed, function(wtMsg)
                                     if wimWhisperUser and type(WIM_PostMessage) == "function" then
                                         WIM_PostMessage(wimWhisperUser, wtMsg, 3)
                                     else
@@ -659,9 +658,10 @@ function WT_HookChatFrames(force)
                             local cached, found = WoWTranslate_CacheGet(capturedArg1)
                             if found then
                                 WT_DebugLog("Cache hit")
-                                local reconstructed = WT_ReconstructMessage(segments, cached)
+                                local safeCached = WT_SanitizeDisplayText and WT_SanitizeDisplayText(cached) or cached
+                                local reconstructed = WT_ReconstructMessage(segments, safeCached)
                                 WT_frameTranslationTargets[capturedArg1] = nil
-                                ResolveNamesAndPost(WT_SanitizeDisplayText and WT_SanitizeDisplayText(reconstructed) or reconstructed, function(wtMsg)
+                                ResolveNamesAndPost(reconstructed, function(wtMsg)
                                     if wimWhisperUser and type(WIM_PostMessage) == "function" then
                                         WIM_PostMessage(wimWhisperUser, wtMsg, 3)
                                     else
@@ -692,7 +692,7 @@ function WT_HookChatFrames(force)
                                     originalText       = p.text,
                                     r = p.r, g = p.g, b = p.b,
                                     id = p.id, holdTime = p.holdTime,
-                                }
+                                    }
                                 capturedThis.wtPendingArgs = nil
                             end
 
@@ -711,13 +711,14 @@ function WT_HookChatFrames(force)
                                     if textToTranslate ~= capturedArg1 then
                                         WoWTranslate_CacheSave(textToTranslate, translation)
                                     end
-                                    local reconstructed = WT_ReconstructMessage(segments, translation)
+                                    local safeTranslation = WT_SanitizeDisplayText and WT_SanitizeDisplayText(translation) or translation
+                                    local reconstructed = WT_ReconstructMessage(segments, safeTranslation)
                                     if replacePendingKey then
                                         WT_pendingMessages[replacePendingKey] = nil
                                     end
                                     local targets = WT_frameTranslationTargets[capturedArg1]
                                     WT_frameTranslationTargets[capturedArg1] = nil
-                                    ResolveNamesAndPost(WT_SanitizeDisplayText and WT_SanitizeDisplayText(reconstructed) or reconstructed, function(wtMsg)
+                                    ResolveNamesAndPost(reconstructed, function(wtMsg)
                                         if wimWhisperUser and type(WIM_PostMessage) == "function" then
                                             WIM_PostMessage(wimWhisperUser, wtMsg, 3)
                                         elseif targets then

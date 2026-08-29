@@ -9,12 +9,26 @@ set PYTHONUNBUFFERED=1
 where python >nul 2>nul
 if %ERRORLEVEL% EQU 0 (
     python -u wow_proxy.py
+    if %ERRORLEVEL% NEQ 0 (
+        echo.
+        echo ===================================================
+        echo   [ERROR] Proxy terminated with error code %ERRORLEVEL%.
+        echo ===================================================
+        pause
+    )
     goto done
 )
 
 where py >nul 2>nul
 if %ERRORLEVEL% EQU 0 (
     py -u wow_proxy.py
+    if %ERRORLEVEL% NEQ 0 (
+        echo.
+        echo ===================================================
+        echo   [ERROR] Proxy terminated with error code %ERRORLEVEL%.
+        echo ===================================================
+        pause
+    )
     goto done
 )
 

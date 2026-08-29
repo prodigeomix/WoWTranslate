@@ -124,7 +124,7 @@ WT_defaults = {
         RAID = true,
         BATTLEGROUND = true,
         CHANNEL = true,
-        HARDCORE = false,
+        HARDCORE = true,
         ENGLISH = false,
     },
     outgoingPrefix = "[Translated by WoWTranslate]",
@@ -140,11 +140,11 @@ WT_defaults = {
     translationColor = "",       -- Hex RRGGBB for translated text body; empty = default chat color
     translationColorFollow = true,   -- If true, body color follows the source channel color
     replaceMode = false,         -- [EXPERIMENTAL] Replace original message with translation instead of appending
-    translateGroupFinder = false, -- [EXPERIMENTAL] Translate LFT group finder titles/descriptions
+    translateGroupFinder = true,  -- Translate LFT group finder titles/descriptions
     -- Name/guild translation
-    translatePlayerNames = false,
-    translateGuildNames = false,
-    translateNameplates = false,
+    translatePlayerNames = true,
+    translateGuildNames = true,
+    translateNameplates = true,
     outgoingButtonPos = { x = 100, y = 100 },
     showOutgoingButton = true,
     playerNameClassColor = true,
