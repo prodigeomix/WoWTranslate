@@ -2,7 +2,7 @@
 """
 tools/test_wowtranslate.py
 ==========================
-Comprehensive unit and integration test suite for WoWTranslate v3.5.9.
+Comprehensive unit and integration test suite for WoWTranslate v3.5.10.
 
 Test Suites:
   1. UTF-8 Multi-byte Safe Truncation Engine (ASCII, CJK, Kana, Cyrillic, 4-byte Emojis, boundary walkbacks).

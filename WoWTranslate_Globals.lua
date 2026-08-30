@@ -24,12 +24,6 @@ WT_pendingMessages = {}
 WT_pendingKeyCounter = 0  -- monotonic counter preventing pending-key collisions
 WT_messageCounter = 0
 
--- Maps capturedArg1 (raw message text) -> {frame -> true}
--- Collects every chat frame that showed the original Chinese message so the async
--- translation callback can post to all of them.  Multiple frames fire the same
--- OnEvent for one message; dedup lets only the first reach the DLL, but all frames
--- that displayed the original must also show the translation.
-WT_frameTranslationTargets = {}
 
 -- Outgoing translation state
 WT_outgoingQueue = {}

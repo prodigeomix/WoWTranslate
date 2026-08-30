@@ -2,6 +2,13 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.5.10] - 2026-08-30
+
+### 🔴 Critical Fixes — Chat Tab Routing & Channel Isolation
+- **Separate Chat Tab Channel Isolation**: Fixed a race-condition bug where incoming translated messages from channels configured exclusively on separate chat tabs (such as `/world` or `/trade` on `ChatFrame3`) were leaking and spilling over into `DEFAULT_CHAT_FRAME` (`ChatFrame1`).
+- **Direct Frame Closure Dispatching**: Replaced the global `WT_frameTranslationTargets` lookup table with direct dispatching to `capturedThis` (the `ChatFrame` instance captured in the frame's `OnEvent` closure). Removed the legacy fallback `else DEFAULT_CHAT_FRAME:AddMessage(wtMsg)` that was erroneously triggered when deduplicated async callbacks completed.
+- **Multi-Tab Channel Subscription**: Maintained request deduplication in `WoWTranslate_API.Translate()` so when multiple tabs subscribe to the same channel, each frame receives the translated message exactly once with zero cross-frame leakage.
+
 ---
 
 ## [v3.5.9] - 2026-08-29

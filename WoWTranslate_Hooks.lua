@@ -648,23 +648,15 @@ function WT_HookChatFrames(force)
 
                             local plainText = WT_BuildTranslatableText(segments)
 
-                            if not wimWhisperUser then
-                                if not WT_frameTranslationTargets[capturedArg1] then
-                                    WT_frameTranslationTargets[capturedArg1] = {}
-                                end
-                                WT_frameTranslationTargets[capturedArg1][capturedThis] = true
-                            end
-
                             local cached, found = WoWTranslate_CacheGet(capturedArg1)
                             if found then
                                 WT_DebugLog("Cache hit")
                                 local safeCached = WT_SanitizeDisplayText and WT_SanitizeDisplayText(cached) or cached
                                 local reconstructed = WT_ReconstructMessage(segments, safeCached)
-                                WT_frameTranslationTargets[capturedArg1] = nil
                                 ResolveNamesAndPost(reconstructed, function(wtMsg)
                                     if wimWhisperUser and type(WIM_PostMessage) == "function" then
                                         WIM_PostMessage(wimWhisperUser, wtMsg, 3)
-                                    else
+                                    elseif capturedThis and capturedThis.AddMessage then
                                         capturedThis:AddMessage(wtMsg)
                                     end
                                 end)
@@ -716,26 +708,15 @@ function WT_HookChatFrames(force)
                                     if replacePendingKey then
                                         WT_pendingMessages[replacePendingKey] = nil
                                     end
-                                    local targets = WT_frameTranslationTargets[capturedArg1]
-                                    WT_frameTranslationTargets[capturedArg1] = nil
                                     ResolveNamesAndPost(reconstructed, function(wtMsg)
                                         if wimWhisperUser and type(WIM_PostMessage) == "function" then
                                             WIM_PostMessage(wimWhisperUser, wtMsg, 3)
-                                        elseif targets then
-                                            local targetList = {}
-                                            for targetFrame in pairs(targets) do
-                                                table.insert(targetList, targetFrame)
-                                            end
-                                            for _, targetFrame in ipairs(targetList) do
-                                                targetFrame:AddMessage(wtMsg)
-                                            end
-                                        else
-                                            DEFAULT_CHAT_FRAME:AddMessage(wtMsg)
+                                        elseif capturedThis and capturedThis.AddMessage then
+                                            capturedThis:AddMessage(wtMsg)
                                         end
                                     end)
                                 else
                                     WT_DebugLog("Translation error:", tostring(err))
-                                    WT_frameTranslationTargets[capturedArg1] = nil
                                     if replacePendingKey then
                                         local rp = WT_pendingMessages[replacePendingKey]
                                         if rp then
@@ -753,18 +734,9 @@ function WT_HookChatFrames(force)
                             -- C6 fix: when Translate() rejects the request, flush the
                             -- original so the user still sees the message (in replaceMode
                             -- the original was suppressed into wtPendingArgs; without
-                            -- this flush it would never be shown).  For "deduped" we
-                            -- leave the original suppressed — another frame's callback
-                            -- will broadcast the translation to all registered targets,
-                            -- including this one.
+                            -- this flush it would never be shown).
                             if not apiQueued then
                                 if rejectReason ~= "deduped" then
-                                    -- queue_full or rate_limited: remove ourselves from
-                                    -- the target map (another frame's callback would
-                                    -- otherwise post a duplicate to us) and flush.
-                                    if WT_frameTranslationTargets[capturedArg1] then
-                                        WT_frameTranslationTargets[capturedArg1][capturedThis] = nil
-                                    end
                                     WT_ChatFrame_FlushOriginal(capturedThis)
                                 end
                             elseif replacePendingData then
