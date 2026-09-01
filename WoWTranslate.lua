@@ -360,6 +360,13 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
     elseif cmd == "hide" then
         WoWTranslate_HideConfig()
 
+    elseif cmd == "donate" or cmd == "sponsor" or cmd == "support" then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF80DF[WoWTranslate]|r Thank you for supporting the ongoing development of WoWTranslate!")
+        DEFAULT_CHAT_FRAME:AddMessage("  GitHub Sponsors: |cFFFFFF00https://github.com/sponsors/prodigeomix|r")
+        if WoWTranslate_ShowSponsorDialog then
+            WoWTranslate_ShowSponsorDialog()
+        end
+
     else
         DEFAULT_CHAT_FRAME:AddMessage("[WoWTranslate] Commands:")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt show - Open configuration panel")
@@ -373,6 +380,7 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  /wt testout [text] - Test outgoing translation")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt reset - Reset hooks, rate limit & clear stuck queues")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt clearcache - Clear translation cache")
+        DEFAULT_CHAT_FRAME:AddMessage("  /wt donate - Support the project (GitHub Sponsors)")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt debug - Toggle debug mode")
         DEFAULT_CHAT_FRAME:AddMessage("  -- Outgoing Translation --")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt out [on|off] - Toggle/set outgoing translation (alias: /wt outgoing)")
@@ -430,7 +438,10 @@ function WT_InitializeSettings()
     WoWTranslateDB.incomingFromLang = nil
 
     if WoWTranslateDB.enabledSourceLangs == nil then
-        WoWTranslateDB.enabledSourceLangs = { zh=true, ja=true, ko=true, ru=true }
+        WoWTranslateDB.enabledSourceLangs = { zh=true, ja=true, ko=true, ru=true, es=false, en=false }
+    end
+    if WoWTranslateDB.enabledSourceLangs.es == nil then
+        WoWTranslateDB.enabledSourceLangs.es = false
     end
     if WoWTranslateDB.enabledSourceLangs.en == nil then
         WoWTranslateDB.enabledSourceLangs.en = false
@@ -465,7 +476,7 @@ function WT_OnAddonLoaded()
         statusText = "|cFFFFFF00Backend not connected (Run start_proxy.bat)|r"
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.5.10 - " .. statusText .. " | /wt show")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.0 - " .. statusText .. " | /wt show")
 end
 
 -- ============================================================================

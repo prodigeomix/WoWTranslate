@@ -8,6 +8,45 @@
 -- Supports: zh (Chinese), ja (Japanese), ko (Korean), ru (Russian)
 -- For Latin-based languages (en, de, fr, es, pt): detects non-ASCII characters
 
+local WT_SPANISH_WORDS = {
+    -- Greetings & common conversation
+    ["hola"] = true, ["buenas"] = true, ["buenos"] = true, ["gracias"] = true,
+    ["denada"] = true, ["amigo"] = true, ["amigos"] = true, ["chicos"] = true,
+    ["gente"] = true, ["saludos"] = true, ["adios"] = true, ["hasta"] = true,
+    -- Group finding, roles & MMO terminology
+    ["busco"] = true, ["buscamos"] = true, ["buscan"] = true,
+    ["alguien"] = true, ["nadie"] = true,
+    ["necesito"] = true, ["necesitamos"] = true, ["necesitan"] = true,
+    ["mazmorra"] = true, ["mazmorras"] = true, ["estancia"] = true, ["estancias"] = true,
+    ["hermandad"] = true, ["sanador"] = true, ["sanadores"] = true, ["curandero"] = true,
+    ["mision"] = true, ["misiones"] = true, ["ayuda"] = true, ["ayudame"] = true,
+    ["listo"] = true, ["listos"] = true, ["vamos"] = true, ["venga"] = true,
+    ["tanque"] = true,
+    -- Question words, adverbs & prepositions
+    ["donde"] = true, ["cuanto"] = true, ["cuando"] = true, ["quien"] = true, ["quienes"] = true,
+    ["porque"] = true, ["como"] = true, ["aqui"] = true, ["alli"] = true, ["alla"] = true,
+    ["para"] = true, ["pero"] = true, ["muy"] = true, ["mucho"] = true, ["muchos"] = true,
+    ["tambien"] = true, ["tampoco"] = true, ["todos"] = true, ["todas"] = true,
+    -- Verbs (high signal)
+    ["tengo"] = true, ["tenemos"] = true, ["tienes"] = true, ["teneis"] = true,
+    ["puedo"] = true, ["puedes"] = true, ["podemos"] = true,
+    ["estoy"] = true, ["estan"] = true, ["estamos"] = true, ["somos"] = true,
+    ["vendo"] = true, ["compro"] = true, ["vender"] = true, ["comprar"] = true,
+    ["hacer"] = true, ["hacemos"] = true, ["hacen"] = true, ["unirse"] = true,
+    ["invita"] = true, ["invitame"] = true, ["invitacion"] = true, ["reparar"] = true,
+}
+
+function WT_ContainsSpanishWords(text)
+    if not text then return false end
+    local lower = string.lower(text)
+    for word in string.gfind(lower, "[%a]+") do
+        if WT_SPANISH_WORDS[word] then
+            return true
+        end
+    end
+    return false
+end
+
 function WT_ContainsLanguageChars(text, lang)
     if not text then return false end
 
@@ -27,6 +66,30 @@ function WT_ContainsLanguageChars(text, lang)
             end
         end
         return count >= 4
+    end
+
+    if lang == "es" then
+        local textLen = string.len(text)
+        for i = 1, textLen do
+            local b = string.byte(text, i)
+            if b == 195 then
+                local b2 = (i + 1 <= textLen) and string.byte(text, i + 1) or 0
+                if (b2 >= 129 and b2 <= 158) or (b2 >= 161 and b2 <= 190) then
+                    return true
+                end
+            elseif b == 194 then
+                local b2 = (i + 1 <= textLen) and string.byte(text, i + 1) or 0
+                if b2 == 161 or b2 == 191 then
+                    return true
+                end
+            elseif (b >= 192 and b <= 255) and b ~= 208 and b ~= 209 and (b < 227 or b > 237) then
+                return true
+            end
+        end
+        if WT_ContainsSpanishWords(text) then
+            return true
+        end
+        return false
     end
 
     for i = 1, string.len(text) do
@@ -58,7 +121,7 @@ function WT_ContainsLanguageChars(text, lang)
                 return true
             end
         else
-            -- Latin-based languages (en, de, fr, es, pt)
+            -- Latin-based languages (de, fr, es, pt)
             -- Detect extended ASCII / accented characters (UTF-8 multi-byte)
             -- Any byte >= 128 indicates non-ASCII (potential accented chars)
             if byte >= 192 and byte <= 223 then
@@ -206,20 +269,21 @@ function WT_PreprocessOutgoing(text)
 end
 
 -- Auto-detect which source language a message is in.
--- Returns "zh", "ja", "ko", "ru", or nil if no supported language found.
+-- Returns "zh", "ja", "ko", "ru", "es", "en", or nil if no supported language found.
 function WT_DetectSourceLanguage(text)
     if not text then return nil end
     local enabled = (WoWTranslateDB and WoWTranslateDB.enabledSourceLangs)
-                    or { zh=true, ja=true, ko=true, ru=true, en=false }
-    -- If table exists but every lang is nil/false, fall back to all-enabled (except en)
-    if not enabled.zh and not enabled.ja and not enabled.ko and not enabled.ru and not enabled.en then
-        enabled = { zh=true, ja=true, ko=true, ru=true, en=false }
+                    or { zh=true, ja=true, ko=true, ru=true, es=false, en=false }
+    -- If table exists but every lang is nil/false, fall back to all-enabled (except en, es)
+    if not enabled.zh and not enabled.ja and not enabled.ko and not enabled.ru and not enabled.es and not enabled.en then
+        enabled = { zh=true, ja=true, ko=true, ru=true, es=false, en=false }
     end
 
     local hasKorean   = false
     local hasKana     = false
     local hasCJK      = false
     local hasRussian  = false
+    local hasSpanishAccent = false
     local asciiAlpha  = 0
 
     local textLen = string.len(text)
@@ -243,6 +307,24 @@ function WT_DetectSourceLanguage(text)
         elseif b == 208 or b == 209 then
             hasRussian = true
             i = i + 2
+        elseif b == 195 then
+            -- UTF-8 Latin-1 Supplement (Spanish accented vowels á, é, í, ó, ú, ü, ñ, etc.)
+            local b2 = (i + 1 <= textLen) and string.byte(text, i + 1) or nil
+            if b2 and ((b2 >= 129 and b2 <= 158) or (b2 >= 161 and b2 <= 190)) then
+                hasSpanishAccent = true
+            end
+            i = i + 2
+        elseif b == 194 then
+            -- UTF-8 ¿ (194 191) or ¡ (194 161)
+            local b2 = (i + 1 <= textLen) and string.byte(text, i + 1) or nil
+            if b2 and (b2 == 161 or b2 == 191) then
+                hasSpanishAccent = true
+            end
+            i = i + 2
+        elseif (b >= 192 and b <= 255) and (b < 227 or b > 237) then
+            -- Single-byte extended ASCII / Latin
+            hasSpanishAccent = true
+            i = i + 1
         else
             if (b >= 65 and b <= 90) or (b >= 97 and b <= 122) then
                 asciiAlpha = asciiAlpha + 1
@@ -259,8 +341,16 @@ function WT_DetectSourceLanguage(text)
     if enabled.ja and hasKana     then return "ja" end
     if enabled.zh and hasCJK      then return "zh" end
     if enabled.ru and hasRussian  then return "ru" end
-    -- English: >= 4 ASCII alpha chars, no CJK/Korean/Japanese/Russian, and enabled in settings.
-    if enabled.en and asciiAlpha >= 4 and not (hasCJK or hasKorean or hasKana or hasRussian) then
+
+    -- Spanish: Spanish accents OR common Spanish words, and enabled in settings.
+    if enabled.es and not (hasCJK or hasKorean or hasKana or hasRussian) then
+        if hasSpanishAccent or (WT_ContainsSpanishWords and WT_ContainsSpanishWords(text)) then
+            return "es"
+        end
+    end
+
+    -- English: >= 4 ASCII alpha chars, no CJK/Korean/Japanese/Russian/Spanish accents, and enabled in settings.
+    if enabled.en and asciiAlpha >= 4 and not (hasCJK or hasKorean or hasKana or hasRussian or hasSpanishAccent) then
         return "en"
     end
     return nil

@@ -127,7 +127,7 @@ WT_defaults = {
     disableWhileAfk = false,
     translateSystemMessages = false,  -- Don't translate system msgs, emotes, NPC speech
     -- Language settings (any-to-any translation)
-    enabledSourceLangs = { zh = true, ja = true, ko = true, ru = true, en = false },
+    enabledSourceLangs = { zh = true, ja = true, ko = true, ru = true, es = false, en = false },
     incomingToLang = "en",
     outgoingFromLang = "en",
     outgoingToLang = "zh",

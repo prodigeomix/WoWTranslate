@@ -105,7 +105,7 @@ end)
 -- Title
 local title = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOP", configFrame, "TOP", 0, -20)
-title:SetText("WoWTranslate Configuration - v3.5.10")
+title:SetText("WoWTranslate Configuration - v3.6.0")
 
 -- Close button
 local closeBtn = CreateFrame("Button", nil, configFrame, "UIPanelCloseButton")
@@ -343,9 +343,10 @@ srcLabel:SetText("Translate incoming from:")
 
 configFrame.elements.srcZH = CreateCheckbox("Chinese",  25,  Y_SRC_ROW, "enabledSourceLangs", "zh")
 configFrame.elements.srcJA = CreateCheckbox("Japanese", 115, Y_SRC_ROW, "enabledSourceLangs", "ja")
-configFrame.elements.srcKO = CreateCheckbox("Korean",   210, Y_SRC_ROW, "enabledSourceLangs", "ko")
-configFrame.elements.srcRU = CreateCheckbox("Russian",  300, Y_SRC_ROW, "enabledSourceLangs", "ru")
-configFrame.elements.srcEN = CreateCheckbox("English",  390, Y_SRC_ROW, "enabledSourceLangs", "en")
+configFrame.elements.srcKO = CreateCheckbox("Korean",   205, Y_SRC_ROW, "enabledSourceLangs", "ko")
+configFrame.elements.srcRU = CreateCheckbox("Russian",  290, Y_SRC_ROW, "enabledSourceLangs", "ru")
+configFrame.elements.srcES = CreateCheckbox("Spanish",  375, Y_SRC_ROW, "enabledSourceLangs", "es")
+configFrame.elements.srcEN = CreateCheckbox("English",  465, Y_SRC_ROW, "enabledSourceLangs", "en")
 
 -- Incoming Channels Section
 local inChLabel = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
@@ -509,6 +510,17 @@ clearBtn:SetScript("OnClick", function()
     end
 end)
 
+local sponsorBtn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
+sponsorBtn:SetPoint("BOTTOMLEFT", configFrame, "BOTTOMLEFT", 155, 12)
+sponsorBtn:SetWidth(140)
+sponsorBtn:SetHeight(26)
+sponsorBtn:SetText("|cFFFF80DF❤️ Sponsor|r")
+sponsorBtn:SetScript("OnClick", function()
+    if WoWTranslate_ShowSponsorDialog then
+        WoWTranslate_ShowSponsorDialog()
+    end
+end)
+
 local saveBtn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
 saveBtn:SetPoint("BOTTOMRIGHT", configFrame, "BOTTOMRIGHT", -25, 12)
 saveBtn:SetWidth(80)
@@ -519,6 +531,73 @@ saveBtn:SetScript("OnClick", function()
     DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Settings saved!|r")
     configFrame:Hide()
 end)
+
+-- ============================================================================
+-- SPONSOR / DONATION DIALOG
+-- ============================================================================
+local sponsorDialog = nil
+function WoWTranslate_ShowSponsorDialog()
+    if not sponsorDialog then
+        sponsorDialog = CreateFrame("Frame", "WoWTranslateSponsorDialog", UIParent)
+        sponsorDialog:SetWidth(420)
+        sponsorDialog:SetHeight(160)
+        sponsorDialog:SetPoint("CENTER", 0, 50)
+        sponsorDialog:SetFrameStrata("FULLSCREEN_DIALOG")
+        sponsorDialog:SetMovable(true)
+        sponsorDialog:EnableMouse(true)
+        sponsorDialog:SetClampedToScreen(true)
+        sponsorDialog:SetBackdrop({
+            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 32,
+            insets = { left = 11, right = 12, top = 12, bottom = 11 }
+        })
+        sponsorDialog:SetBackdropColor(0, 0, 0, 0.95)
+        sponsorDialog:SetScript("OnMouseDown", function() this:StartMoving() end)
+        sponsorDialog:SetScript("OnMouseUp", function() this:StopMovingOrSizing() end)
+
+        local title = sponsorDialog:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+        title:SetPoint("TOP", sponsorDialog, "TOP", 0, -16)
+        title:SetText("|cFFFF80DF❤️ Support WoWTranslate on GitHub Sponsors|r")
+
+        local desc = sponsorDialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        desc:SetPoint("TOP", title, "BOTTOM", 0, -10)
+        desc:SetText("Press |cFFFFFF00Ctrl + C|r to copy the link and open in your browser:")
+
+        local editBox = CreateFrame("EditBox", "WoWTranslateSponsorEditBox", sponsorDialog)
+        editBox:SetPoint("TOP", desc, "BOTTOM", 0, -12)
+        editBox:SetWidth(360)
+        editBox:SetHeight(24)
+        editBox:SetFontObject(GameFontHighlight)
+        editBox:SetAutoFocus(false)
+        editBox:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 }
+        })
+        editBox:SetBackdropColor(0, 0, 0, 0.8)
+        editBox:SetTextInsets(6, 6, 0, 0)
+        editBox:SetScript("OnEscapePressed", function() sponsorDialog:Hide() end)
+        editBox:SetScript("OnEnterPressed", function() sponsorDialog:Hide() end)
+        editBox:SetScript("OnEditFocusGained", function() this:HighlightText() end)
+
+        local closeBtn = CreateFrame("Button", nil, sponsorDialog, "UIPanelButtonTemplate")
+        closeBtn:SetPoint("BOTTOM", sponsorDialog, "BOTTOM", 0, 16)
+        closeBtn:SetWidth(80)
+        closeBtn:SetHeight(22)
+        closeBtn:SetText("Done")
+        closeBtn:SetScript("OnClick", function() sponsorDialog:Hide() end)
+
+        sponsorDialog.editBox = editBox
+        tinsert(UISpecialFrames, "WoWTranslateSponsorDialog")
+    end
+
+    sponsorDialog.editBox:SetText("https://github.com/sponsors/prodigeomix")
+    sponsorDialog:Show()
+    sponsorDialog.editBox:SetFocus()
+    sponsorDialog.editBox:HighlightText()
+end
 
 -- ============================================================================
 -- REFRESH UI FROM CONFIG
@@ -560,6 +639,7 @@ local function RefreshUI()
     if e.srcJA then e.srcJA:SetChecked(srcLangs.ja) end
     if e.srcKO then e.srcKO:SetChecked(srcLangs.ko) end
     if e.srcRU then e.srcRU:SetChecked(srcLangs.ru) end
+    if e.srcES then e.srcES:SetChecked(srcLangs.es) end
     if e.srcEN then e.srcEN:SetChecked(srcLangs.en) end
 
     if e.inTo and e.inTo.display then

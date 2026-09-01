@@ -2,6 +2,24 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.0] - 2026-09-01
+
+### 🟢 New Feature — Spanish Source Language & Incoming Translation Support
+- **Spanish Source Language Checkbox**: Added **Spanish** (`es`) to the *"Translate incoming from:"* source language selection row in [WoWTranslate_Config.lua](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Config.lua).
+- **Accented & Extended Latin Detection**: Implemented robust UTF-8 and extended ASCII byte recognition in `WT_DetectSourceLanguage()` and `WT_ContainsLanguageChars()` in [WoWTranslate_String.lua](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_String.lua) for Spanish vowels and punctuation (`á, é, í, ó, ú, ü, ñ, Á, É, Í, Ó, Ú, Ü, Ñ, ¿, ¡`).
+- **Spanish MMO Gaming Vocabulary Engine**: Built `WT_SPANISH_WORDS` and `WT_ContainsSpanishWords()` recognizing unaccented Spanish gaming chat, LFG keywords, greetings, question terms, group finding phrases, and role requests (e.g. `hola`, `buenas`, `busco grupo`, `mazmorra`, `estancia`, `necesito tanque`, `sanador`, `mision`, `hermandad`, `ayuda`, `listos`).
+- **SavedVariables & Settings Persistence**: Initialized `enabledSourceLangs.es = false` in `WT_defaults` ([WoWTranslate_Globals.lua](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Globals.lua)) and `WT_InitializeSettings` ([WoWTranslate.lua](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate.lua)).
+- **Unit Test Suite & Audit Expansion**: Added `TestSpanishLanguageDetection` to [tools/test_wowtranslate.py](file:///c:/Games/Interface/AddOns/WoWTranslate/tools/test_wowtranslate.py) covering accented Spanish, unaccented gaming chat, English isolation, toggle disable states, and SQLite database storage.
+
+### 🟡 Forensic Audit & Repository Modernization
+- **Strict Lua 5.0 & TOC Verification**: All 12 Lua files verified strictly compliant with Lua 5.0 and WoW 1.12.1 client engine constraints.
+- **Synchronized Versioning**: Bumped all addon headers, proxy constants, test runners, and configuration banners to `v3.6.0`.
+
+### 💬 Community & Acknowledgments
+- **Special Thanks**: Huge shoutout to **ninja_tabby** for requesting and inspiring full Spanish ➔ English translation support!
+
+---
+
 ## [v3.5.10] - 2026-08-30
 
 ### 🔴 Critical Fixes — Chat Tab Routing & Channel Isolation
