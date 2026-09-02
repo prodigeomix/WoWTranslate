@@ -32,6 +32,7 @@ import copy
 import hashlib
 import html
 import http.server
+import io
 import json
 import os
 import queue
@@ -50,7 +51,7 @@ if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
+    except (AttributeError, io.UnsupportedOperation, OSError):
         pass
 
 VERSION = "3.6.0"
@@ -59,11 +60,11 @@ USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 # ---------------------------------------------------------------------------
 # Configuration Loader
 # ---------------------------------------------------------------------------
-try:
+if sys.version_info >= (3, 11):
     import tomllib
-except ImportError:
+else:
     try:
-        import tomli as tomllib
+        import tomli as tomllib  # type: ignore[no-redef]
     except ImportError:
         tomllib = None
 
@@ -108,7 +109,7 @@ def load_config(path):
             print("[config] WARNING: no backends configured; enabling Google external fallback (chat text goes to Google).")
         print(f"[config] Loaded {path}")
         return cfg
-    except Exception as e:
+    except (OSError, ValueError, TypeError) as e:
         print(f"[config] Error reading {path}: {e}, using defaults.")
         print("[config] WARNING: your configured backends were NOT loaded because the config is malformed; the default backend list (including external Google) is active instead. FIX config.toml to restore local-only translation.")
         return copy.deepcopy(DEFAULT_CONFIG)
@@ -202,7 +203,7 @@ def cache_get(db_path, text, from_lang, to_lang):
             (h, from_lang.lower(), to_lang.lower()),
         ).fetchone()
         return row[0] if row else None
-    except Exception as e:
+    except sqlite3.Error as e:
         print(f"[cache] GET error: {e}")
         return None
 
@@ -215,14 +216,14 @@ def cache_set(db_path, text, from_lang, to_lang, result):
             (h, from_lang.lower(), to_lang.lower(), result, int(time.time())),
         )
         _db(db_path).commit()
-    except Exception as e:
+    except sqlite3.Error as e:
         print(f"[cache] SET error: {e}")
 
 def cache_count(db_path):
     try:
         row = _db(db_path).execute("SELECT COUNT(*) FROM translations").fetchone()
         return row[0] if row else 0
-    except Exception:
+    except sqlite3.Error:
         return 0
 
 def cache_purge_code_switched(db_path):
@@ -235,7 +236,7 @@ def cache_purge_code_switched(db_path):
         rows = conn.execute(
             "SELECT src_hash, from_lang, to_lang, result FROM translations"
         ).fetchall()
-    except Exception as e:
+    except sqlite3.Error as e:
         print(f"[cache] purge error: {e}")
         return 0
     bad = []
@@ -243,26 +244,23 @@ def cache_purge_code_switched(db_path):
         # Only inspect pairs whose target is a non-Latin script; skip pure-EN targets.
         if not re.search(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff]", result or ""):
             continue
-        try:
-            # We only stored the hash, not the source text — so detect the
-            # artifact directly in the output. Require the English word to be
-            # EMBEDDED in non-Latin script: a non-ASCII, non-Latin char
-            # immediately before AND after it. This spares legit mixed chat
-            # like '我喜欢Star Wars' or trailing brand/item names.
-            for m in re.finditer(r"[A-Za-z']+", result):
-                wl = m.group(0).lower()
-                if len(wl) < 4 or wl in _PRESERVE_TERMS:
-                    continue
-                s, e = m.start(), m.end()
-                if s == 0 or e >= len(result):
-                    continue  # at string edge -> not embedded
-                before, after = result[s - 1], result[e]
-                if (ord(before) > 0x2FFF and not before.isascii()
-                        and ord(after) > 0x2FFF and not after.isascii()):
-                    bad.append((h, fl, tl))
-                    break
-        except Exception:
-            continue
+        # We only stored the hash, not the source text — so detect the
+        # artifact directly in the output. Require the English word to be
+        # EMBEDDED in non-Latin script: a non-ASCII, non-Latin char
+        # immediately before AND after it. This spares legit mixed chat
+        # like '我喜欢Star Wars' or trailing brand/item names.
+        for m in re.finditer(r"[A-Za-z']+", result):
+            wl = m.group(0).lower()
+            if len(wl) < 4 or wl in _PRESERVE_TERMS:
+                continue
+            s, e = m.start(), m.end()
+            if s == 0 or e >= len(result):
+                continue  # at string edge -> not embedded
+            before, after = result[s - 1], result[e]
+            if (ord(before) > 0x2FFF and not before.isascii()
+                    and ord(after) > 0x2FFF and not after.isascii()):
+                bad.append((h, fl, tl))
+                break
     if bad:
         conn.executemany(
             "DELETE FROM translations WHERE src_hash=? AND from_lang=? AND to_lang=?",
@@ -288,14 +286,14 @@ def _is_ollama_online(url="http://localhost:11434/api/tags"):
             req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 _ollama_online = (resp.status == 200)
-        except Exception:
+        except (urllib.error.URLError, TimeoutError, OSError):
             _ollama_online = False
         _ollama_last_check = now
         return _ollama_online
 
 def _call_ollama(text, from_lang, to_lang, backend):
     raw_url = backend.get("url", "http://localhost:11434").rstrip("/")
-    if raw_url.endswith("/api/generate") or raw_url.endswith("/api/chat"):
+    if raw_url.endswith(("/api/generate", "/api/chat")):
         base_url = re.sub(r"/api/(?:generate|chat)$", "", raw_url).rstrip("/")
     else:
         base_url = raw_url
@@ -365,7 +363,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         result = data.get("message", {}).get("content", "").strip()
-    except Exception as ce:
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, KeyError) as ce:
         chat_exc = ce
         result = ""
 
@@ -392,7 +390,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
             result = data.get("response", "").strip()
-        except Exception as ge:
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, KeyError) as ge:
             err_msg = f"Ollama /api/generate failed: {ge}"
             if chat_exc:
                 err_msg += f" (chat error: {chat_exc})"
@@ -514,7 +512,7 @@ def _call_google(text, from_lang, to_lang, backend):
             res = "".join(parts).strip()
             if res:
                 return res
-    except Exception:
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, IndexError, KeyError):
         pass
 
     # 2. Secondary: clients5.google.com
@@ -530,7 +528,7 @@ def _call_google(text, from_lang, to_lang, backend):
                 return data2[0].strip()
             elif isinstance(data2[0], list) and len(data2[0]) > 0 and isinstance(data2[0][0], str):
                 return data2[0][0].strip()
-    except Exception:
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, IndexError, KeyError):
         pass
 
     # 3. Tertiary: translate.google.com/m mobile endpoint
@@ -544,7 +542,7 @@ def _call_google(text, from_lang, to_lang, backend):
         match = re.search(r'class="result-container">([^<]+)', raw)
         if match:
             return html.unescape(match.group(1)).strip()
-    except Exception as e3:
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e3:
         raise ValueError(f"Google Translate rate limit / connection error ({e3})")
 
     raise ValueError("Google Translate returned empty response across all endpoints")
@@ -632,10 +630,10 @@ def _call_gemini(text, from_lang, to_lang, backend):
             last_exc = he
             if he.code == 404:
                 continue
-            raise he
+            raise
         except Exception as e:
             last_exc = e
-            raise e
+            raise
 
     raise last_exc or ValueError("Gemini request failed")
 
@@ -674,7 +672,7 @@ def _looks_code_switched(source_text, translated_text, min_len=4):
     # Only meaningful when the translation is mostly non-Latin (zh/ja/ko/ru).
     if not re.search(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff]", translated_text):
         return False
-    src_words = set(w.lower() for w in re.findall(r"[A-Za-z']+", source_text))
+    src_words = {w.lower() for w in re.findall(r"[A-Za-z']+", source_text)}
     for m in re.finditer(r"[A-Za-z']+", translated_text):
         wl = m.group(0).lower()
         if len(wl) < min_len or wl in _PRESERVE_TERMS or wl not in src_words:
@@ -724,7 +722,7 @@ def translate(text, from_lang, to_lang, backends):
                 r_disp = (result[:50] + "...") if len(result) > 50 else result
                 print(f"[translate] [{btype}] {from_lang} -> {to_lang}: '{t_disp}' -> '{r_disp}'")
                 return result, None
-        except Exception as e:
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, KeyError, ValueError) as e:
             last_err = f"{btype}: {e}"
             print(f"[translate] [{btype}] failed: {e}")
             continue
@@ -841,17 +839,17 @@ def _write_ipc_result(req_id, status, body, ipc_targets):
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write(f"{status}|{body}")
             os.replace(tmp_path, res_path)
-        except Exception as e:
+        except OSError:
             try:
                 os.remove(tmp_path)
-            except Exception:
+            except OSError:
                 pass
 
 def _safe_delete(path):
     try:
         if os.path.exists(path):
             os.remove(path)
-    except Exception:
+    except OSError:
         pass
 
 def start_workers(n, db_path, backends, ipc_targets):
@@ -867,8 +865,8 @@ def start_workers(n, db_path, backends, ipc_targets):
 # ---------------------------------------------------------------------------
 class ProxyHTTPHandler(http.server.BaseHTTPRequestHandler):
     db_path = ""
-    backends = []
-    ipc_targets = []
+    backends = ()
+    ipc_targets = ()
 
     def log_message(self, format, *args):
         pass  # Suppress default noisy access logs
@@ -956,7 +954,7 @@ def start_http_server(port, db_path, backends, ipc_targets):
         t.start()
         print(f"[http] HTTP server listening on http://127.0.0.1:{port}")
         return httpd
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         print(f"[http] Warning: Could not start HTTP server on port {port}: {e}")
         return None
 
@@ -989,7 +987,7 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
             with open(ready_path, "w", encoding="utf-8") as f:
                 f.write("ok|proxy_ready")
             print(f"[proxy] Wrote proxy_ready to {ready_path}")
-        except Exception:
+        except OSError:
             pass
 
     last_cleanup = time.time()
@@ -1012,12 +1010,12 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
             if os.path.exists(ping_file):
                 try:
                     os.remove(ping_file)
-                except Exception:
+                except OSError:
                     pass
                 try:
                     with open(pong_file, "w", encoding="utf-8") as f:
                         f.write(f"ok|{int(now)}")
-                except Exception:
+                except OSError:
                     pass
 
             # 2. Scan requests
@@ -1026,7 +1024,7 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                 
             try:
                 entries = os.listdir(req_dir)
-            except Exception:
+            except OSError:
                 continue
 
             for fname in entries:
@@ -1043,7 +1041,7 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
 
                 try:
                     age = now - os.path.getmtime(req_path)
-                except Exception:
+                except OSError:
                     continue
 
                 if age > stale_ttl:
@@ -1067,7 +1065,7 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                         unmark_in_flight(req_path)
                         continue
                     from_lang, to_lang, text = parse_request_file(content)
-                except Exception as e:
+                except (OSError, ValueError, UnicodeDecodeError) as e:
                     if age > 1.0:
                         print(f"[proxy] Error parsing {fname}: {e}")
                         _safe_delete(req_path)
@@ -1099,9 +1097,9 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
                                 try:
                                     if now - os.path.getmtime(fp) > stale_ttl:
                                         os.remove(fp)
-                                except Exception:
+                                except OSError:
                                     pass
-                    except Exception:
+                    except OSError:
                         pass
 
         time.sleep(scan_iv)

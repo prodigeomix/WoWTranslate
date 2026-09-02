@@ -35,6 +35,7 @@ WT_pendingNameTranslations = {}
 
 -- Forward reference: assigned after WT_HookNameplates is defined so
 -- WoWTranslate_SetTranslateNameplates can start the scanner mid-session.
+---@type function|nil
 WT_wtNameplateScanStart = nil
 
 -- Pre-translated prefixes for outgoing messages (zero API cost)
@@ -179,7 +180,7 @@ end
 -- DEBUG LOGGING
 -- ============================================================================
 
-function WT_DebugLog(a1, a2, a3, a4, a5)
+function WT_DebugLog(a1, a2, a3, a4, a5, a6, a7, a8)
     if not WT_DEBUG_MODE then return end
 
     local msg = ""
@@ -188,6 +189,9 @@ function WT_DebugLog(a1, a2, a3, a4, a5)
     if a3 then msg = msg .. tostring(a3) .. " " end
     if a4 then msg = msg .. tostring(a4) .. " " end
     if a5 then msg = msg .. tostring(a5) .. " " end
+    if a6 then msg = msg .. tostring(a6) .. " " end
+    if a7 then msg = msg .. tostring(a7) .. " " end
+    if a8 then msg = msg .. tostring(a8) .. " " end
 
     local timestamp = string.format("%.1f", GetTime())
     local logEntry = "[" .. timestamp .. "] " .. msg

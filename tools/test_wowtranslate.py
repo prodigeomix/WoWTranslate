@@ -18,7 +18,6 @@ import hashlib
 import os
 import re
 import sqlite3
-import sys
 import tempfile
 import unittest
 
@@ -200,7 +199,7 @@ class TestSQLiteDatabase(unittest.TestCase):
 class TestSpanishLanguageDetection(unittest.TestCase):
     """Tests Spanish source language detection matching WoWTranslate_String.lua logic."""
 
-    SPANISH_WORDS = {
+    SPANISH_WORDS = frozenset({
         "hola", "buenas", "buenos", "gracias", "denada", "amigo", "amigos", "chicos",
         "gente", "saludos", "adios", "hasta", "busco", "buscamos", "buscan", "alguien",
         "nadie", "necesito", "necesitamos", "necesitan", "mazmorra", "mazmorras", "estancia",
@@ -211,7 +210,7 @@ class TestSpanishLanguageDetection(unittest.TestCase):
         "tienes", "teneis", "puedo", "puedes", "podemos", "estoy", "estan", "estamos", "somos",
         "vendo", "compro", "vender", "comprar", "hacer", "hacemos", "hacen", "unirse",
         "invita", "invitame", "invitacion", "reparar"
-    }
+    })
 
     def detect_lang(self, text, enabled_langs=None):
         if enabled_langs is None:

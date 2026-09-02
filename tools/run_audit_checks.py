@@ -15,10 +15,10 @@ Runs:
 """
 
 import os
+import py_compile
 import re
 import subprocess
 import sys
-import py_compile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ADDON_DIR = os.path.dirname(SCRIPT_DIR)
@@ -67,7 +67,7 @@ def py_safe_utf8_truncate(s: str, max_bytes: int) -> str:
 
 def test_lua_validation():
     print("[1/8] Running Lua 5.0 strict validator...")
-    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "validate_lua50.py")], capture_output=True, text=True)
+    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "validate_lua50.py")], capture_output=True, text=True, check=False)
     if res.returncode != 0:
         print(res.stdout)
         print(res.stderr)
@@ -77,7 +77,7 @@ def test_lua_validation():
 
 def test_toc_and_static_analysis():
     print("[2/8] Running TOC order & static analysis checker...")
-    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "check_lua.py")], capture_output=True, text=True)
+    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "check_lua.py")], capture_output=True, text=True, check=False)
     if res.returncode != 0:
         print(res.stdout)
         print(res.stderr)
@@ -97,7 +97,7 @@ def test_python_compilation():
 
 def test_unit_test_suite():
     print("[4/8] Running comprehensive unit test suite...")
-    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "test_wowtranslate.py")], capture_output=True, text=True)
+    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "test_wowtranslate.py")], capture_output=True, text=True, check=False)
     if res.returncode != 0:
         print(res.stdout)
         print(res.stderr)
@@ -199,11 +199,11 @@ def test_config_validation():
     config_path = os.path.join(ADDON_DIR, "config.toml")
     assert os.path.exists(config_path), "config.toml not found!"
     
-    try:
+    if sys.version_info >= (3, 11):
         import tomllib
-    except ImportError:
+    else:
         try:
-            import tomli as tomllib
+            import tomli as tomllib  # type: ignore[no-redef]
         except ImportError:
             tomllib = None
 
@@ -236,11 +236,8 @@ def main():
         print("  ALL 8 AUDIT TEST SUITES PASSED! Codebase certified clean.")
         print("=" * 65)
         return 0
-    except AssertionError as e:
+    except (AssertionError, RuntimeError, ValueError, OSError, subprocess.SubprocessError) as e:
         print(f"\n[AUDIT FAILURE]: {e}")
-        return 1
-    except Exception as e:
-        print(f"\n[UNEXPECTED ERROR]: {e}")
         return 1
 
 
