@@ -122,6 +122,13 @@ function WoWTranslate_CacheMaybeEvict()
         WoWTranslateCache[key] = nil
         WoWTranslateCacheOrder[key] = nil
     end
+
+    -- Clean up any orphaned order keys that no longer exist in WoWTranslateCache
+    for key, _ in pairs(WoWTranslateCacheOrder) do
+        if WoWTranslateCache[key] == nil then
+            WoWTranslateCacheOrder[key] = nil
+        end
+    end
 end
 
 -- Clear the cache (use with caution)

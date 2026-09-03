@@ -476,7 +476,7 @@ function WT_OnAddonLoaded()
         statusText = "|cFFFFFF00Backend not connected (Run start_proxy.bat)|r"
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.0 - " .. statusText .. " | /wt show")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.1 - " .. statusText .. " | /wt show")
 end
 
 -- ============================================================================

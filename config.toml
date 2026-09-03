@@ -15,9 +15,8 @@ scan_interval = 0.05
 # Setup:
 #   1. Download and run Ollama from https://ollama.com
 #   2. In your terminal, run ONE of the following:
-#        ollama pull qwen2.5        (Default - standard gaming PCs)
-#        ollama pull qwen2.5:1.5b   (Recommended for speed / laptops)
-#        ollama pull qwen2.5:3b     (Balanced speed & quality)
+#        ollama pull qwen2.5:3b     (Recommended Default - 2.0GB, fast & low VRAM while gaming)
+#        ollama pull qwen2.5:1.5b   (Ultra-fast for laptops & older PCs)
 #        ollama pull qwen2.5:7b     (High accuracy - 8GB+ GPU VRAM)
 #   3. Make sure the 'model' line below matches the exact name from 'ollama list':
 [[backends]]

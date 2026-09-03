@@ -2,7 +2,7 @@
 """
 tools/test_wowtranslate.py
 ==========================
-Comprehensive unit and integration test suite for WoWTranslate v3.6.0.
+Comprehensive unit and integration test suite for WoWTranslate v3.6.1.
 
 Test Suites:
   1. UTF-8 Multi-byte Safe Truncation Engine (ASCII, CJK, Kana, Cyrillic, 4-byte Emojis, boundary walkbacks).
@@ -332,6 +332,137 @@ class TestSpanishLanguageDetection(unittest.TestCase):
         temp_dir.cleanup()
 
 
+class TestHyperlinkExtractionAndSanitization(unittest.TestCase):
+    """Verifies hyperlink preservation and display text sanitization."""
+
+    @staticmethod
+    def py_sanitize_display_text(text: str) -> str:
+        """Python equivalent of WT_SanitizeDisplayText (WoWTranslate_Hyperlink.lua)."""
+        if not text:
+            return text
+        res = str(text)
+        res = re.sub(r"\|c[0-9a-fA-F]{8}", "", res)
+        res = re.sub(r"\|r", "", res)
+        res = re.sub(r"\|H.*?\|h(.*?)\|h", r"\1", res)
+        res = re.sub(r"\|H.*?\|h", "", res)
+        res = re.sub(r"\|T.*?\|t", "", res)
+        res = res.replace("|n", " ")
+        res = res.replace("||", "|")
+        return res
+
+    def test_sanitize_color_codes(self):
+        colored = "|cFFFF8000[Thunderfury, Blessed Blade of the Windseeker]|r"
+        clean = self.py_sanitize_display_text(colored)
+        self.assertEqual(clean, "[Thunderfury, Blessed Blade of the Windseeker]")
+
+    def test_sanitize_hyperlinks(self):
+        linked = "|cffa335ee|Hitem:19364:0:0:0|h[Ashkandi, Greatsword of the Brotherhood]|h|r"
+        clean = self.py_sanitize_display_text(linked)
+        self.assertEqual(clean, "[Ashkandi, Greatsword of the Brotherhood]")
+
+    def test_sanitize_newlines_and_textures(self):
+        text = "Hello|nWorld |TInterface\\Icons\\Spell_Holy_Heal:16|t!"
+        clean = self.py_sanitize_display_text(text)
+        self.assertEqual(clean, "Hello World !")
+
+    def test_placeholder_token_isolation(self):
+        """Ensures link placeholders ' http://ph.wt/1 ' survive segment mapping without mangling text."""
+        original = "LF1M for |cffa335ee|Hitem:19019:0:0:0|h[Thunderfury]|h|r fast run"
+        segments = [
+            {"type": "text", "content": "LF1M for "},
+            {"type": "link", "content": "|cffa335ee|Hitem:19019:0:0:0|h[Thunderfury]|h|r"},
+            {"type": "text", "content": " fast run"},
+        ]
+        self.assertEqual("".join(s["content"] for s in segments), original)
+        # Build translatable text:
+        parts = []
+        link_idx = 0
+        for seg in segments:
+            if seg["type"] == "text":
+                parts.append(seg["content"])
+            else:
+                link_idx += 1
+                parts.append(f" http://ph.wt/{link_idx} ")
+        translatable = "".join(parts)
+        self.assertEqual(translatable, "LF1M for  http://ph.wt/1  fast run")
+
+        # Mock translation returning the placeholder in place:
+        translated_body = "组1人去 http://ph.wt/1 速度来"
+        reconstructed = translated_body.replace("http://ph.wt/1", segments[1]["content"])
+        self.assertIn(segments[1]["content"], reconstructed)
+        self.assertTrue(reconstructed.startswith("组1人去 "))
+        self.assertTrue(reconstructed.endswith(" 速度来"))
+
+
+class TestCacheKeyIsolationAndLRUEviction(unittest.TestCase):
+    """Verifies cache key direction isolation and LRU eviction order."""
+
+    @staticmethod
+    def py_cache_key(incoming_to: str, outgoing_to: str, text: str) -> str:
+        """Python equivalent of CacheKey in WoWTranslate_Cache.lua."""
+        to_str = f"{incoming_to or '?'}/{outgoing_to or '?'}"
+        return f"{to_str}|{text}"
+
+    def test_directional_cache_isolation(self):
+        key_incoming = self.py_cache_key("en", "zh", "你好")
+        key_outgoing = self.py_cache_key("zh", "en", "你好")
+        self.assertNotEqual(key_incoming, key_outgoing)
+        self.assertTrue(key_incoming.startswith("en/zh|"))
+        self.assertTrue(key_outgoing.startswith("zh/en|"))
+
+    def test_lru_eviction_threshold(self):
+        """Simulates WoWTranslate_CacheMaybeEvict with 10 entries, max 8, fraction 0.25 (drop 2)."""
+        cache = {f"k{i}": f"val{i}" for i in range(1, 11)}
+        order = {f"k{i}": i for i in range(1, 11)}  # k1 is oldest (ts=1), k10 is newest (ts=10)
+        max_entries = 8
+        evict_fraction = 0.25
+
+        if len(cache) > max_entries:
+            timestamps = sorted(order[k] for k in cache)
+            to_evict = int(len(timestamps) * evict_fraction)  # 10 * 0.25 = 2
+            threshold = timestamps[to_evict - 1]  # index 1 -> ts=2
+            keys_to_evict = [k for k in cache if order[k] <= threshold][:to_evict]
+            for k in keys_to_evict:
+                del cache[k]
+                del order[k]
+
+        self.assertEqual(len(cache), 8)
+        self.assertNotIn("k1", cache)
+        self.assertNotIn("k2", cache)
+        self.assertIn("k3", cache)
+        self.assertIn("k10", cache)
+
+
+class TestProxyAtomicWriteAndIPC(unittest.TestCase):
+    """Verifies atomic result writing and wire safety."""
+
+    def test_wire_pipe_and_control_char_escaping(self):
+        raw_body = "Hello|World\nWith\tNewlines"
+        # Logic from _write_ipc_result:
+        body = raw_body.replace("|", "/")
+        body = "".join(ch if ord(ch) >= 0x20 else " " for ch in body)
+        wire_line = f"ok|{body}"
+        self.assertEqual(wire_line, "ok|Hello/World With Newlines")
+        self.assertNotIn("\n", wire_line)
+        self.assertNotIn("\t", wire_line)
+        parts = wire_line.split("|", 1)
+        self.assertEqual(parts[0], "ok")
+        self.assertEqual(parts[1], "Hello/World With Newlines")
+
+    def test_atomic_file_replacement(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            res_path = os.path.join(temp_dir, "test.res")
+            tmp_path = res_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write("ok|translated text")
+            os.replace(tmp_path, res_path)
+            self.assertTrue(os.path.exists(res_path))
+            self.assertFalse(os.path.exists(tmp_path))
+            with open(res_path, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read(), "ok|translated text")
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

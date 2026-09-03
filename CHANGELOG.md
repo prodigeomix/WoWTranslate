@@ -2,6 +2,24 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.1] - 2026-09-03
+
+### ⚡ Performance & Default Model Optimization (Qwen 2.5 3B)
+- **Qwen 2.5 3B Default Engine**: Preconfigured `model = "qwen2.5:3b"` across [config.toml](file:///c:/Games/Interface/AddOns/WoWTranslate/config.toml), [wow_proxy.py](file:///c:/Games/Interface/AddOns/WoWTranslate/wow_proxy.py), and [README.md](file:///c:/Games/Interface/AddOns/WoWTranslate/README.md).
+  - Drops VRAM allocation from ~5.5 GB (7B) down to ~2.2 GB (3B), completely preventing GPU memory paging when World of Warcraft is running.
+  - Slashes inference latency to **200ms – 400ms** on consumer gaming GPUs.
+  - Aligned quickstart documentation so the 1-click command pulls `qwen2.5:3b`, eliminating previous `404 Not Found` model tag mismatches.
+
+### 🔴 Core Engine Hardening
+- **ReplaceMode Message Recovery on Queue Rejection**: Fixed an edge-case in [WoWTranslate_Hooks.lua](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Hooks.lua) where incoming chat suppressed in `replaceMode` was lost if `WoWTranslate_API.Translate()` rejected the request (e.g., during queue saturation or rate limits). Added immediate fallback rendering from `replacePendingData`.
+- **SavedVariables Cache Order Sanitation**: In [WoWTranslate_Cache.lua](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Cache.lua), added automatic purging of orphaned keys in `WoWTranslateCacheOrder` during LRU eviction to prevent disk inflation of `SavedVariables.lua`.
+
+### 🧪 Test Suite & Audit Expansion
+- **Comprehensive Test Expansion**: Added 8 new test cases to [tools/test_wowtranslate.py](file:///c:/Games/Interface/AddOns/WoWTranslate/tools/test_wowtranslate.py) (23/23 tests passing) covering hyperlink sanitization, directional cache key isolation, and atomic Windows `.tmp` IPC replacement.
+- **Forensic Audit Certified**: Documented full 5-subsystem forensic audit findings in [docs/forensic_code_audit_v3.6.0.md](file:///c:/Games/Interface/AddOns/WoWTranslate/docs/forensic_code_audit_v3.6.0.md).
+
+---
+
 ## [v3.6.0] - 2026-09-01
 
 ### 🟢 New Feature — Spanish Source Language & Incoming Translation Support

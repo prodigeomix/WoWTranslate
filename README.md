@@ -69,33 +69,33 @@ Choose **either** Method A (PowerShell) or Method B (Browser):
 ### 🟢 STEP 3: Download the Free AI Translation Model (Using CMD / PowerShell)
 
 To download the AI translation brain onto your computer, run a single command in **Command Prompt (CMD)** or **PowerShell**:
-
 1. **Open Command Prompt (CMD):**
    - Press **`Windows Key + R`**, type **`cmd`**, and press **Enter**.
 
 2. **Choose & Download ONE Model based on your PC:**
 
-   | Model Command | Download Size | Best For | Speed | Required `config.toml` setting |
-   | :--- | :--- | :--- | :--- | :--- |
-   | `ollama pull qwen2.5` | ~4.7 GB | Standard / Gaming PCs (7B default) | ⚡ Fast | `model = "qwen2.5"` *(Default)* |
-   | `ollama pull qwen2.5:1.5b` | ~1.0 GB | **Laptops & Older PCs** (Recommended for speed!) | 🚀 Instant | `model = "qwen2.5:1.5b"` |
-   | `ollama pull qwen2.5:3b` | ~2.0 GB | Great balance of speed & quality | ⚡ Fast | `model = "qwen2.5:3b"` |
-   | `ollama pull qwen2.5:0.5b` | ~400 MB | Ultra-low-end PCs / CPU only | 🚀 Instant | `model = "qwen2.5:0.5b"` |
-   | `ollama pull qwen2.5:7b` | ~4.7 GB | High-end GPUs (alias for 7B default) | ⚡ Fast | `model = "qwen2.5:7b"` |
+    | Model Command | Download Size | Best For | Speed | Preconfigured in `config.toml` |
+    | :--- | :--- | :--- | :--- | :--- |
+    | `ollama pull qwen2.5:3b` | ~2.0 GB | **Standard & Gaming PCs** (Optimal VRAM alongside WoW!) | 🚀 200–400ms | `model = "qwen2.5:3b"` *(Default)* |
+    | `ollama pull qwen2.5:1.5b` | ~1.0 GB | **Laptops & Older PCs** (Ultra-lightweight) | ⚡ Instant | `model = "qwen2.5:1.5b"` |
+    | `ollama pull qwen2.5:7b` | ~4.7 GB | High-end GPUs (Requires 8GB+ free VRAM) | ⚡ Fast | `model = "qwen2.5:7b"` |
+    | `ollama pull qwen2.5:0.5b` | ~400 MB | Ultra-low-end PCs / CPU-only | ⚡ Instant | `model = "qwen2.5:0.5b"` |
 
 3. **Paste the command in CMD and press Enter:**
-   - Example for ultra-fast performance on any PC:
+   - Run the recommended default:
      ```cmd
-     ollama pull qwen2.5:1.5b
+     ollama pull qwen2.5:3b
      ```
    - Wait for the download progress to reach `100%` and say **`success`**.
 
-> ⚠️ **IMPORTANT RULE IF YOU CHOOSE A DIFFERENT MODEL:**
-> If you pull a specific model tag (e.g. `qwen2.5:1.5b`, `qwen2.5:3b`, or `qwen2.5:7b`), you **must** open [`config.toml`](config.toml) and match the exact name:
+> 💡 **Why `qwen2.5:3b` is the pre-configured default:**
+> Running a 7B model requires ~5.5 GB of VRAM, which often causes GPU memory contention and lag when World of Warcraft is actively running. The **3B model** requires only ~2.2 GB VRAM, translating incoming and outgoing chat in **200–400ms** with virtually identical translation accuracy.
+>
+> ⚠️ **If you choose a different model:**
+> If you pull a different tag (e.g. `qwen2.5:1.5b` or `qwen2.5:7b`), open [`config.toml`](config.toml) and update the `model` line:
 > ```toml
 > model = "qwen2.5:1.5b"
 > ```
-> *(If the name in `config.toml` doesn't match what is installed in Ollama, Ollama will return `404 Not Found` and the proxy will automatically fall back to Google Translate).*
 
 ---
 

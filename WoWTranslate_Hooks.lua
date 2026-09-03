@@ -737,7 +737,13 @@ function WT_HookChatFrames(force)
                             -- this flush it would never be shown).
                             if not apiQueued then
                                 if rejectReason ~= "deduped" then
-                                    WT_ChatFrame_FlushOriginal(capturedThis)
+                                    if replacePendingData then
+                                        WT_SafeAddMessage(replacePendingData.WT_originalAddMessage, replacePendingData.frame,
+                                            replacePendingData.originalText, replacePendingData.r, replacePendingData.g,
+                                            replacePendingData.b, replacePendingData.id, replacePendingData.holdTime)
+                                    else
+                                        WT_ChatFrame_FlushOriginal(capturedThis)
+                                    end
                                 end
                             elseif replacePendingData then
                                 replacePendingKey = "r|" .. tostring(capturedThis) .. "|" .. capturedArg1

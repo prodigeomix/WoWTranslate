@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.6.0  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.6.1  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -54,7 +54,7 @@ if sys.platform == "win32":
     except (AttributeError, io.UnsupportedOperation, OSError):
         pass
 
-VERSION = "3.6.0"
+VERSION = "3.6.1"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ DEFAULT_CONFIG = {
         {
             "type": "ollama",
             "url": "http://localhost:11434/api/generate",
-            "model": "qwen2.5",
+            "model": "qwen2.5:3b",
             "timeout": 20,
         },
         {
@@ -331,7 +331,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
         f"4. Output Format: Return ONLY the raw translated text. No explanations, quotes, markdown, conversational commentary, or channel prefixes."
     )
 
-    model = backend.get("model", "qwen2.5")
+    model = backend.get("model", "qwen2.5:3b")
     timeout = backend.get("timeout", 20)
     keep_alive = backend.get("keep_alive", "1h")
     temperature = backend.get("temperature", 0.0)
