@@ -1088,11 +1088,18 @@ def ipc_scanner(ipc_targets, db_path, backends, cfg):
             last_cleanup = now
             clean_http_results()
             for ipc_root in ipc_targets:
-                res_dir = os.path.join(ipc_root, "results")
+                is_imports = os.path.basename(ipc_root).lower() == "imports"
+                if is_imports:
+                    res_dir = ipc_root
+                    is_res_file = lambda fn: (fn.startswith("res_") and fn.endswith(".txt")) or fn.endswith(".tmp")
+                else:
+                    res_dir = os.path.join(ipc_root, "results")
+                    is_res_file = lambda fn: fn.endswith(".res") or fn.endswith(".tmp")
+
                 if os.path.exists(res_dir):
                     try:
                         for fname in os.listdir(res_dir):
-                            if fname.endswith(".res"):
+                            if is_res_file(fname):
                                 fp = os.path.join(res_dir, fname)
                                 try:
                                     if now - os.path.getmtime(fp) > stale_ttl:

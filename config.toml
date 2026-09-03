@@ -32,3 +32,24 @@ keep_alive = "1h"
 [[backends]]
 type = "google"
 timeout = 8
+
+# ---------------------------------------------------------------------------
+# Optional Cloud AI Backends (Uncomment & add your API key if desired)
+# ---------------------------------------------------------------------------
+
+# [[backends]]
+# type = "gemini"
+# api_key = "YOUR_GEMINI_API_KEY"
+# model = "gemini-2.5-flash"
+# timeout = 10
+
+# [[backends]]
+# type = "deepl"
+# api_key = "YOUR_DEEPL_API_KEY"
+# timeout = 10
+
+# [[backends]]
+# type = "openai"
+# api_key = "YOUR_OPENAI_API_KEY"
+# model = "gpt-4o-mini"
+# timeout = 10

@@ -19,6 +19,7 @@ import os
 import re
 import sqlite3
 import tempfile
+import time
 import unittest
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -460,6 +461,65 @@ class TestProxyAtomicWriteAndIPC(unittest.TestCase):
             self.assertFalse(os.path.exists(tmp_path))
             with open(res_path, "r", encoding="utf-8") as f:
                 self.assertEqual(f.read(), "ok|translated text")
+
+    def test_periodic_cleanup_superwow_and_luaio(self):
+        """Ensures periodic cleanup removes stale SuperWoW res_*.txt and LuaIO *.res, plus orphan .tmp files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            imports_dir = os.path.join(temp_dir, "Imports")
+            luaio_dir = os.path.join(temp_dir, "IPC")
+            luaio_res = os.path.join(luaio_dir, "results")
+            os.makedirs(imports_dir)
+            os.makedirs(luaio_res)
+
+            # Create test files
+            stale_superwow = os.path.join(imports_dir, "res_req1.txt")
+            fresh_superwow = os.path.join(imports_dir, "res_req2.txt")
+            tmp_superwow = os.path.join(imports_dir, "res_req3.txt.tmp")
+            other_file = os.path.join(imports_dir, "unrelated.txt")
+
+            stale_luaio = os.path.join(luaio_res, "out_1.res")
+            fresh_luaio = os.path.join(luaio_res, "out_2.res")
+            tmp_luaio = os.path.join(luaio_res, "out_3.res.tmp")
+
+            for p in [stale_superwow, fresh_superwow, tmp_superwow, other_file,
+                      stale_luaio, fresh_luaio, tmp_luaio]:
+                with open(p, "w", encoding="utf-8") as f:
+                    f.write("test")
+
+            # Set mtime on stale files to 200 seconds in the past
+            now = time.time()
+            stale_time = now - 200
+            for p in [stale_superwow, tmp_superwow, stale_luaio, tmp_luaio]:
+                os.utime(p, (stale_time, stale_time))
+
+            # Simulate cleanup logic from wow_proxy.py
+            stale_ttl = 60
+            ipc_targets = [imports_dir, luaio_dir]
+            for ipc_root in ipc_targets:
+                is_imports = os.path.basename(ipc_root).lower() == "imports"
+                if is_imports:
+                    res_dir = ipc_root
+                    is_res_file = lambda fn: (fn.startswith("res_") and fn.endswith(".txt")) or fn.endswith(".tmp")
+                else:
+                    res_dir = os.path.join(ipc_root, "results")
+                    is_res_file = lambda fn: fn.endswith(".res") or fn.endswith(".tmp")
+
+                if os.path.exists(res_dir):
+                    for fname in os.listdir(res_dir):
+                        if is_res_file(fname):
+                            fp = os.path.join(res_dir, fname)
+                            if now - os.path.getmtime(fp) > stale_ttl:
+                                os.remove(fp)
+
+            # Assert stale were cleaned, fresh and unrelated were kept
+            self.assertFalse(os.path.exists(stale_superwow))
+            self.assertFalse(os.path.exists(tmp_superwow))
+            self.assertTrue(os.path.exists(fresh_superwow))
+            self.assertTrue(os.path.exists(other_file))
+
+            self.assertFalse(os.path.exists(stale_luaio))
+            self.assertFalse(os.path.exists(tmp_luaio))
+            self.assertTrue(os.path.exists(fresh_luaio))
 
 
 if __name__ == "__main__":

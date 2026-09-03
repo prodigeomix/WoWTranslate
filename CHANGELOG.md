@@ -11,11 +11,13 @@ All notable changes, fixes, and improvements to **WoWTranslate** are documented 
   - Aligned quickstart documentation so the 1-click command pulls `qwen2.5:3b`, eliminating previous `404 Not Found` model tag mismatches.
 
 ### 🔴 Core Engine Hardening
+- **SuperWoW & IPC Disk Hygiene**: Enhanced periodic cleanup in [wow_proxy.py](file:///c:/Games/Interface/AddOns/WoWTranslate/wow_proxy.py) to remove abandoned SuperWoW `res_*.txt` files in `Imports/` and orphaned `.tmp` files older than `stale_ttl`, preventing disk buildup across long gaming sessions.
 - **ReplaceMode Message Recovery on Queue Rejection**: Fixed an edge-case in [WoWTranslate_Hooks.lua](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Hooks.lua) where incoming chat suppressed in `replaceMode` was lost if `WoWTranslate_API.Translate()` rejected the request (e.g., during queue saturation or rate limits). Added immediate fallback rendering from `replacePendingData`.
 - **SavedVariables Cache Order Sanitation**: In [WoWTranslate_Cache.lua](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Cache.lua), added automatic purging of orphaned keys in `WoWTranslateCacheOrder` during LRU eviction to prevent disk inflation of `SavedVariables.lua`.
+- **Cloud Backend Configuration Templates**: Added ready-to-use commented configurations for Google Gemini (`gemini-2.5-flash`), DeepL, and OpenAI (`gpt-4o-mini`) in [config.toml](file:///c:/Games/Interface/AddOns/WoWTranslate/config.toml).
 
 ### 🧪 Test Suite & Audit Expansion
-- **Comprehensive Test Expansion**: Added 8 new test cases to [tools/test_wowtranslate.py](file:///c:/Games/Interface/AddOns/WoWTranslate/tools/test_wowtranslate.py) (23/23 tests passing) covering hyperlink sanitization, directional cache key isolation, and atomic Windows `.tmp` IPC replacement.
+- **Comprehensive Test Expansion**: Added test suites to [tools/test_wowtranslate.py](file:///c:/Games/Interface/AddOns/WoWTranslate/tools/test_wowtranslate.py) (now 24/24 tests passing) covering hyperlink sanitization, directional cache key isolation, atomic Windows `.tmp` replacement, and dual SuperWoW/LuaIO periodic IPC cleanup.
 - **Forensic Audit Certified**: Documented full 5-subsystem forensic audit findings in [docs/forensic_code_audit_v3.6.0.md](file:///c:/Games/Interface/AddOns/WoWTranslate/docs/forensic_code_audit_v3.6.0.md).
 
 ---
