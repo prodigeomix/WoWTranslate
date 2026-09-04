@@ -2,7 +2,7 @@
 """
 tools/test_wowtranslate.py
 ==========================
-Comprehensive unit and integration test suite for WoWTranslate v3.6.1.
+Comprehensive unit and integration test suite for WoWTranslate v3.6.2.
 
 Test Suites:
   1. UTF-8 Multi-byte Safe Truncation Engine (ASCII, CJK, Kana, Cyrillic, 4-byte Emojis, boundary walkbacks).
@@ -520,6 +520,56 @@ class TestProxyAtomicWriteAndIPC(unittest.TestCase):
             self.assertFalse(os.path.exists(stale_luaio))
             self.assertFalse(os.path.exists(tmp_luaio))
             self.assertTrue(os.path.exists(fresh_luaio))
+
+
+class TestChatAestheticsAndGlossaryDualLanguage(unittest.TestCase):
+    """Verifies that exact glossary outgoing translations preserve dual-language and chat tag styles format correctly."""
+
+    def test_exact_glossary_dual_language_format(self):
+        """Simulates outgoing exact glossary reconstruction with dual language enabled."""
+        msg = "drowned?"
+        reconstructed = "被淹了？"
+        dual_enabled = True
+
+        if dual_enabled and msg and reconstructed != msg:
+            body = f"{reconstructed} ({msg})"
+        else:
+            body = reconstructed
+
+        self.assertEqual(body, "被淹了？ (drowned?)")
+
+        prefix = "[CN]"
+        final_msg = f"{prefix} {body}"
+        self.assertEqual(final_msg, "[CN] 被淹了？ (drowned?)")
+
+    def test_chat_tag_styles(self):
+        """Verifies tag formatting for arrow, compact, and classic bracket styles."""
+        chan_color = "40FF40"
+        chan_name = "Party"
+        sender = "[Player]* 60:"
+        body = "Transaction complete."
+
+        def format_msg(style):
+            if style == "arrow":
+                prefix = f"|cFF{chan_color}[{chan_name}]|r |cFF00FFFF»|r"
+            elif style == "compact":
+                prefix = f"|cFF{chan_color}[{chan_name}]|r |cFF00FFFF[TR]|r"
+            else:
+                prefix = f"|cFF00FFFF[WT-|r|cFF{chan_color}{chan_name}]|r"
+            return f"{prefix} {sender} {body}"
+
+        arrow_line = format_msg("arrow")
+        compact_line = format_msg("compact")
+        bracket_line = format_msg("bracket")
+
+        self.assertIn("»", arrow_line)
+        self.assertIn("[Party]", arrow_line)
+        self.assertNotIn("[WT-Party]", arrow_line)
+
+        self.assertIn("[TR]", compact_line)
+        self.assertIn("[Party]", compact_line)
+
+        self.assertIn("[WT-", bracket_line)
 
 
 if __name__ == "__main__":

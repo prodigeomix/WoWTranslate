@@ -241,8 +241,21 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
             WoWTranslateDB.outgoingPrefix = arg
             DEFAULT_CHAT_FRAME:AddMessage("[WoWTranslate] Outgoing prefix set to: " .. arg)
         else
-            DEFAULT_CHAT_FRAME:AddMessage("[WoWTranslate] Current prefix: " .. (WoWTranslateDB.outgoingPrefix or "[Translated by WoWTranslate]"))
+            DEFAULT_CHAT_FRAME:AddMessage("[WoWTranslate] Current prefix: " .. (WoWTranslateDB.outgoingPrefix or "[CN]"))
             DEFAULT_CHAT_FRAME:AddMessage("  Usage: /wt prefix <text>")
+        end
+
+    elseif cmd == "style" or cmd == "tagstyle" then
+        if arg == "arrow" or arg == "bracket" or arg == "compact" then
+            WoWTranslateDB.chatTagStyle = arg
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Chat tag style set to: " .. arg .. "|r")
+        else
+            local cur = WoWTranslateDB.chatTagStyle or "arrow"
+            DEFAULT_CHAT_FRAME:AddMessage("[WoWTranslate] Current chat tag style: " .. cur)
+            DEFAULT_CHAT_FRAME:AddMessage("  Usage: /wt style <arrow|compact|bracket>")
+            DEFAULT_CHAT_FRAME:AddMessage("    arrow:   [Party] » [Name]: translation")
+            DEFAULT_CHAT_FRAME:AddMessage("    compact: [Party] [TR] [Name]: translation")
+            DEFAULT_CHAT_FRAME:AddMessage("    bracket: [WT-Party] [Name]: translation")
         end
 
     elseif cmd == "testout" then
@@ -382,6 +395,7 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  /wt clearcache - Clear translation cache")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt donate - Support the project (GitHub Sponsors)")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt debug - Toggle debug mode")
+        DEFAULT_CHAT_FRAME:AddMessage("  /wt style [arrow|compact|bracket] - Change chat tag style")
         DEFAULT_CHAT_FRAME:AddMessage("  -- Outgoing Translation --")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt out [on|off] - Toggle/set outgoing translation (alias: /wt outgoing)")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt outchannel [channel] - Show/toggle outgoing channels")
@@ -410,8 +424,11 @@ function WT_InitializeSettings()
         end
     end
 
-    if WoWTranslateDB.outgoingPrefix == "[Translated]" then
-        WoWTranslateDB.outgoingPrefix = "[Translated by WoWTranslate]"
+    if WoWTranslateDB.outgoingPrefix == "[Translated]" or WoWTranslateDB.outgoingPrefix == "[Translated by WoWTranslate]" then
+        WoWTranslateDB.outgoingPrefix = "[CN]"
+    end
+    if WoWTranslateDB.chatTagStyle == nil then
+        WoWTranslateDB.chatTagStyle = "arrow"
     end
 
     if WoWTranslateDB.outgoingChannels then
@@ -476,7 +493,7 @@ function WT_OnAddonLoaded()
         statusText = "|cFFFFFF00Backend not connected (Run start_proxy.bat)|r"
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.1 - " .. statusText .. " | /wt show")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.2 - " .. statusText .. " | /wt show")
 end
 
 -- ============================================================================

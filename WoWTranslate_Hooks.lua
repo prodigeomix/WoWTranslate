@@ -603,11 +603,24 @@ function WT_HookChatFrames(force)
                             local chanNamePart = string.sub(channelTag, 1, 3) == "WT-" and string.sub(channelTag, 4) or nil
 
                             local function BuildWTMsg(body)
+                                local tagStyle = (WoWTranslateDB and WoWTranslateDB.chatTagStyle) or "arrow"
                                 local prefix
                                 if chanColorHex and chanNamePart then
-                                    prefix = "|cFF00FFFF[WT-|r|cFF" .. chanColorHex .. chanNamePart .. "]|r"
+                                    if tagStyle == "arrow" then
+                                        prefix = "|cFF" .. chanColorHex .. "[" .. chanNamePart .. "]|r |cFF00FFFF»|r"
+                                    elseif tagStyle == "compact" then
+                                        prefix = "|cFF" .. chanColorHex .. "[" .. chanNamePart .. "]|r |cFF00FFFF[TR]|r"
+                                    else
+                                        prefix = "|cFF00FFFF[WT-|r|cFF" .. chanColorHex .. chanNamePart .. "]|r"
+                                    end
                                 else
-                                    prefix = "|cFF00FFFF[" .. channelTag .. "]|r"
+                                    if tagStyle == "arrow" then
+                                        prefix = "|cFF00FFFF[" .. channelTag .. "] »|r"
+                                    elseif tagStyle == "compact" then
+                                        prefix = "|cFF00FFFF[" .. channelTag .. "] [TR]|r"
+                                    else
+                                        prefix = "|cFF00FFFF[" .. channelTag .. "]|r"
+                                    end
                                 end
                                 local bodyHex = msgColor
                                 if WoWTranslateDB and WoWTranslateDB.translationColorFollow then
@@ -936,6 +949,16 @@ function WT_HookedSendChatMessage(msg, chatType, language, channel)
         local reconstructed = WT_ReconstructMessage(segments, exactGlossaryResult)
         WT_DebugLog("Outgoing exact glossary reconstructed:", reconstructed)
 
+        -- Dual-language mode: include both translation and original text
+        local messageBody = reconstructed
+        local dualEnabled = true
+        if WoWTranslateDB and WoWTranslateDB.outgoingDualLanguage ~= nil then
+            dualEnabled = WoWTranslateDB.outgoingDualLanguage
+        end
+        if dualEnabled and msg and msg ~= "" and reconstructed ~= msg then
+            messageBody = reconstructed .. " (" .. msg .. ")"
+        end
+
         local finalMsg
         if WoWTranslateDB.outgoingPrefixEnabled then
             local userPrefix = WoWTranslateDB.outgoingPrefix or WT_DEFAULT_PREFIX
@@ -946,9 +969,9 @@ function WT_HookedSendChatMessage(msg, chatType, language, channel)
             else
                 prefix = userPrefix
             end
-            finalMsg = prefix .. " " .. reconstructed
+            finalMsg = prefix .. " " .. messageBody
         else
-            finalMsg = reconstructed
+            finalMsg = messageBody
         end
 
         -- C7 fix: use SafeUTF8Truncate so we don't split a multi-byte

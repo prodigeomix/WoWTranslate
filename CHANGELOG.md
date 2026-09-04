@@ -2,6 +2,28 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.2] - 2026-09-04
+
+### 🎨 Chat Display Aesthetics & Tag Style Modernization
+- **Modern Arrow Chat Tag Style (`»`)**: Replaced the clunky, double-bracket `[WT-Party] [Player]: ...` channel prefix with a sleek, native Blizzard-styled indicator: `[Party] » [Player]* 60: ...`.
+  - Channel name retains its authentic Blizzard chat color (e.g. green for Party, orange for Trade, pink for Whisper).
+  - Cyan `»` arrow cleanly denotes translated lines with zero visual bracket soup.
+- **Configurable Tag Styles**: Added `/wt style <arrow|compact|bracket>` slash command and an in-game cycle button in `/wt` config:
+  - **`arrow` (Default)**: `[Party] » [Name]*: Translation`
+  - **`compact`**: `[Party] [TR] [Name]*: Translation`
+  - **`bracket` (Classic)**: `[WT-Party] [Name]*: Translation`
+- **Streamlined Outgoing Prefix (`[CN]`)**: Replaced the 26-byte `[由WoWTranslate翻译]` watermark with a compact `[CN]` (or `[EN]`, `[KR]`, `[JP]`, `[RU]`, `[ES]`) tag. Saves 21 bytes of chat width and eliminates spammy advertising tags. Automatic migration of legacy prefixes.
+
+### 🔴 Critical Bug Fix — Exact Glossary Dual-Language Preservation
+- **Preserve Original English on Glossary Hits**: Fixed a bug in [WoWTranslate_Hooks.lua](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Hooks.lua) where outgoing chat matching the instant exact glossary omitted the dual-language `(original English)` text in parentheses.
+- **Eliminated Inter-Addon Translation Drops**: Because glossary hits now properly preserve `(original English)` and outgoing prefixes no longer contain the `"WoWTranslate"` string, other party members running WoWTranslate no longer drop outgoing messages from fellow party members.
+
+### 🧪 Test Suite & Audit Certification
+- **Expanded Test Suite**: Added `TestChatAestheticsAndGlossaryDualLanguage` in [tools/test_wowtranslate.py](file:///c:/Games/Interface/AddOns/WoWTranslate/tools/test_wowtranslate.py) (26/26 tests passing).
+- **Forensic Audit Certified**: All 8 forensic audit verification suites passing in [tools/run_audit_checks.py](file:///c:/Games/Interface/AddOns/WoWTranslate/tools/run_audit_checks.py).
+
+---
+
 ## [v3.6.1] - 2026-09-03
 
 ### ⚡ Performance & Default Model Optimization (Qwen 2.5 3B)

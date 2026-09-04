@@ -38,19 +38,19 @@ WT_pendingNameTranslations = {}
 ---@type function|nil
 WT_wtNameplateScanStart = nil
 
--- Pre-translated prefixes for outgoing messages (zero API cost)
+-- Pre-translated prefixes for outgoing messages (compact, zero API cost)
 WT_TRANSLATED_PREFIXES = {
-    zh = "[由WoWTranslate翻译]",
-    en = "[Translated by WoWTranslate]",
-    ko = "[WoWTranslate 번역]",
-    ja = "[WoWTranslate翻訳]",
-    ru = "[Переведено WoWTranslate]",
-    de = "[Übersetzt von WoWTranslate]",
-    fr = "[Traduit par WoWTranslate]",
-    es = "[Traducido por WoWTranslate]",
-    pt = "[Traduzido por WoWTranslate]",
+    zh = "[CN]",
+    en = "[EN]",
+    ko = "[KR]",
+    ja = "[JP]",
+    ru = "[RU]",
+    de = "[DE]",
+    fr = "[FR]",
+    es = "[ES]",
+    pt = "[PT]",
 }
-WT_DEFAULT_PREFIX = "[Translated by WoWTranslate]"
+WT_DEFAULT_PREFIX = "[CN]"
 
 -- Incoming channel detection state
 WT_currentIncomingChannel = nil
@@ -122,7 +122,7 @@ WT_defaults = {
         HARDCORE = true,
         ENGLISH = false,
     },
-    outgoingPrefix = "[Translated by WoWTranslate]",
+    outgoingPrefix = "[CN]",
     outgoingPrefixEnabled = true,
     outgoingDualLanguage = true, -- Sends both translated and original text: e.g. "嗨 (HELLO)"
     disableWhileAfk = false,
@@ -134,6 +134,7 @@ WT_defaults = {
     outgoingToLang = "zh",
     translationColor = "",       -- Hex RRGGBB for translated text body; empty = default chat color
     translationColorFollow = true,   -- If true, body color follows the source channel color
+    chatTagStyle = "arrow",      -- "arrow" ([Party] » [Name]), "compact" ([Party] [TR] [Name]), "bracket" ([WT-Party] [Name])
     replaceMode = false,         -- [EXPERIMENTAL] Replace original message with translation instead of appending
     translateGroupFinder = true,  -- Translate LFT group finder titles/descriptions
     -- Name/guild translation

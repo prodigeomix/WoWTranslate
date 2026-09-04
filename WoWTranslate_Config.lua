@@ -105,7 +105,7 @@ end)
 -- Title
 local title = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOP", configFrame, "TOP", 0, -20)
-title:SetText("WoWTranslate Configuration - v3.6.1")
+title:SetText("WoWTranslate Configuration - v3.6.2")
 
 -- Close button
 local closeBtn = CreateFrame("Button", nil, configFrame, "UIPanelCloseButton")
@@ -472,6 +472,39 @@ configFrame.elements.colorSwatch = colorSwatch
 
 configFrame.elements.colorFollow = CreateCheckbox("Follow channel color", 25, Y_COLOR_FOLLOW, "translationColorFollow", nil)
 
+local tagStyleBtn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
+tagStyleBtn:SetWidth(150)
+tagStyleBtn:SetHeight(20)
+tagStyleBtn:SetPoint("TOPLEFT", configFrame, "TOPLEFT", 240, Y_COLOR_FOLLOW)
+
+local function UpdateTagStyleBtnText()
+    local cur = (WoWTranslateDB and WoWTranslateDB.chatTagStyle) or "arrow"
+    if cur == "arrow" then
+        tagStyleBtn:SetText("Tag Style: » Arrow")
+    elseif cur == "compact" then
+        tagStyleBtn:SetText("Tag Style: [TR]")
+    else
+        tagStyleBtn:SetText("Tag Style: [WT-]")
+    end
+end
+
+tagStyleBtn:SetScript("OnClick", function()
+    local cur = (WoWTranslateDB and WoWTranslateDB.chatTagStyle) or "arrow"
+    local nextStyle = "arrow"
+    if cur == "arrow" then
+        nextStyle = "compact"
+    elseif cur == "compact" then
+        nextStyle = "bracket"
+    else
+        nextStyle = "arrow"
+    end
+    if WoWTranslateDB then WoWTranslateDB.chatTagStyle = nextStyle end
+    UpdateTagStyleBtnText()
+end)
+
+configFrame.elements.tagStyleBtn = tagStyleBtn
+WT_UpdateTagStyleBtnText = UpdateTagStyleBtnText
+
 -- Experimental Section
 local expHeader = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 expHeader:SetPoint("TOPLEFT", configFrame, "TOPLEFT", 25, Y_EXP_HEADER)
@@ -632,6 +665,8 @@ local function RefreshUI()
     if e.outEnabled  then e.outEnabled:SetChecked(cfg.outgoingEnabled) end
     if e.outPrefix   then e.outPrefix:SetChecked(cfg.outgoingPrefixEnabled) end
     if e.outShowBtn  then e.outShowBtn:SetChecked(cfg.showOutgoingButton) end
+    if e.colorFollow then e.colorFollow:SetChecked(cfg.translationColorFollow) end
+    if WT_UpdateTagStyleBtnText then WT_UpdateTagStyleBtnText() end
 
     -- Source language checkboxes
     local srcLangs = cfg.enabledSourceLangs or {}
