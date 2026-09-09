@@ -2,6 +2,20 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.3] - 2026-09-09
+
+### 🐛 Critical Bug Fix — SendChatMessage Hook Stack Overflow on UI Reload
+
+- **Root Cause**: `outgoingHookInstalled` was declared as a `local` variable in `WoWTranslate_Hooks.lua`. On `/reloadui`, Lua re-executes all addon files, resetting the local to `false` even though `SendChatMessage` still pointed to `WT_HookedSendChatMessage` from the previous load. The next outgoing message re-triggered `WT_InstallOutgoingHook`, which captured `WT_HookedSendChatMessage` as `WT_nextSendChatMessage`, creating an immediate self-referential loop → stack overflow spam at line 868.
+- **Fix 1 — Global guard flag**: Promoted `local outgoingHookInstalled` to `WT_outgoingHookInstalled` (global with nil-guard init). The flag now survives UI reloads so the primary guard works correctly across re-executions.
+- **Fix 2 — Self-reference check**: Added a belt-and-suspenders assertion inside `WT_InstallOutgoingHook`: if `SendChatMessage == WT_HookedSendChatMessage` before install, bail safely and restore `WT_nextSendChatMessage` from the original snapshot rather than creating the loop.
+- **Applied to**: [`WoWTranslate_Hooks.lua`](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Hooks.lua) and [`WoWTranslate_all.lua`](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_all.lua).
+
+### 🧪 Audit Certification
+- All 8 forensic audit verification suites passing.
+
+---
+
 ## [v3.6.2] - 2026-09-04
 
 ### 🎨 Chat Display Aesthetics & Tag Style Modernization

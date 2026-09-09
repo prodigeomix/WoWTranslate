@@ -1082,8 +1082,15 @@ end
 -- restore that captured function.  This way we don't clobber later-loaded
 -- addons and they don't clobber us.
 
--- Track if hook is installed (for diagnostics)
-local outgoingHookInstalled = false
+-- Track if hook is installed (for diagnostics).
+-- MUST be a global (not local) so it survives UI reloads.  A local resets
+-- to false every time the file is re-executed, causing the install guard
+-- below to be skipped while SendChatMessage already points to our wrapper —
+-- resulting in WT_nextSendChatMessage -> WT_HookedSendChatMessage -> infinite
+-- recursion and a stack overflow.
+if WT_outgoingHookInstalled == nil then
+    WT_outgoingHookInstalled = false
+end
 -- WT_nextSendChatMessage is forward-declared at the top of this file so all
 -- functions share the same upvalue.  It holds the function that was installed
 -- on SendChatMessage at install time (could be the Blizzard global or another
@@ -1091,19 +1098,34 @@ local outgoingHookInstalled = false
 
 -- Install the outgoing message hook
 function WT_InstallOutgoingHook()
-    if outgoingHookInstalled then return end
+    if WT_outgoingHookInstalled then return end
+    -- Belt-and-suspenders: if SendChatMessage is already our hook (e.g.
+    -- after a UI reload reset the old local guard to false) then do NOT
+    -- capture it as WT_nextSendChatMessage — that would create a direct
+    -- self-referential loop and cause an immediate stack overflow.
+    if SendChatMessage == WT_HookedSendChatMessage then
+        WT_DebugLog("InstallOutgoingHook: already installed (stale guard), skipping")
+        WT_outgoingHookInstalled = true
+        -- WT_nextSendChatMessage should already point to the real sender;
+        -- if it was cleared (e.g. RemoveOutgoingHook ran first), restore it
+        -- from the original snapshot so SafeSend can still dispatch.
+        if not WT_nextSendChatMessage then
+            WT_nextSendChatMessage = WT_originalSendChatMessage
+        end
+        return
+    end
     WT_DebugLog("Installing outgoing SendChatMessage hook (chain)")
     -- Capture whatever is currently installed — could be the Blizzard global
     -- or another addon's wrapper.  We call through it so its behavior is
     -- preserved.
     WT_nextSendChatMessage = SendChatMessage
     SendChatMessage = WT_HookedSendChatMessage
-    outgoingHookInstalled = true
+    WT_outgoingHookInstalled = true
 end
 
 -- Remove the outgoing message hook
 function WT_RemoveOutgoingHook()
-    if not outgoingHookInstalled then return end
+    if not WT_outgoingHookInstalled then return end
     -- Only restore if our wrapper is still on top.  If another addon wrapped
     -- on top of us, we leave their wrapper in place (they own the global now)
     -- but mark ourselves as uninstalled so WT_IsOutgoingHookActive reports
@@ -1113,11 +1135,11 @@ function WT_RemoveOutgoingHook()
         SendChatMessage = WT_nextSendChatMessage or WT_originalSendChatMessage
     end
     WT_nextSendChatMessage = nil
-    outgoingHookInstalled = false
+    WT_outgoingHookInstalled = false
 end
 
 -- Check if hook is active (for diagnostics)
 function WT_IsOutgoingHookActive()
-    return outgoingHookInstalled and SendChatMessage == WT_HookedSendChatMessage
+    return WT_outgoingHookInstalled and SendChatMessage == WT_HookedSendChatMessage
 end
 
