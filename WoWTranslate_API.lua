@@ -1,5 +1,5 @@
 -- WoWTranslate_API.lua
--- Universal Multi-Transport API for WoWTranslate (v3.6.3)
+-- Universal Multi-Transport API for WoWTranslate (v3.6.4)
 -- Supports SuperWoW (Imports\req_*.txt), Standard Lua IO (WoWTranslate\IPC\), and UnitXP C++ DLL.
 --
 -- Transports:

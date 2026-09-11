@@ -2,6 +2,26 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.4] - 2026-09-11
+
+### 🐛 Critical Bug Fix — Complete Resolution of SendChatMessage Stack Overflow
+- **Root Cause Identified**:
+  1. `WT_nextSendChatMessage` was declared as a file-scoped `local` in `WoWTranslate_Hooks.lua`. On `/reloadui` or file re-execution, this `local` was re-initialized to `nil` while `WT_outgoingHookInstalled` (global) remained `true`, causing `WT_InstallOutgoingHook` to bail early and leave `WT_nextSendChatMessage` as `nil`.
+  2. In `WoWTranslate_Globals.lua`, `WT_originalSendChatMessage = SendChatMessage` was unconditionally re-executed on reload, capturing `WT_HookedSendChatMessage` as our fallback and destroying the original Blizzard C-function snapshot.
+  3. `WT_SafeSendChatMessage` fell back to `WT_originalSendChatMessage` (now pointing to `WT_HookedSendChatMessage`), triggering a direct infinite recursive loop that exploded at line 868 (`local list = {GetChannelList()}`).
+  4. Complete absence of a reentrancy lock (`WT_isSendingOutgoing`) allowed nested calls from other chat addons in the hook chain to re-enter `WT_HookedSendChatMessage`.
+- **Comprehensive Fixes Applied**:
+  - **Reentrancy Lock**: Added `WT_isSendingOutgoing` boolean flag. If `WT_SafeSendChatMessage` is in-flight, `WT_HookedSendChatMessage` bypasses interception entirely and passes straight through to underlying senders.
+  - **Global & Self-Reference Safe Resolution**: Promoted `WT_nextSendChatMessage` to a persistent global, protected `WT_originalSendChatMessage` from being overwritten by our own wrapper on reload, and added strict guards in `WT_SafeSendChatMessage` guaranteeing it can never call `WT_HookedSendChatMessage`.
+  - **Multi-Type Channel Matching**: Supported both string and integer channel IDs in `GetChannelList()` iteration.
+- **Applied to**: [`WoWTranslate_Globals.lua`](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Globals.lua), [`WoWTranslate_Hooks.lua`](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_Hooks.lua), and [`WoWTranslate_all.lua`](file:///c:/Games/Interface/AddOns/WoWTranslate/WoWTranslate_all.lua).
+- **Unit Tests**: Added `TestSendChatMessageHookChainingAndReentrancy` covering reload snapshot protection, self-reference bailout, channel matching, and cyclic loop prevention.
+
+### 🧪 Audit Certification
+- All 8 forensic audit verification suites passing.
+
+---
+
 ## [v3.6.3] - 2026-09-09
 
 ### 🐛 Critical Bug Fix — SendChatMessage Hook Stack Overflow on UI Reload

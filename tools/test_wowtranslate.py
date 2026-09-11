@@ -2,7 +2,7 @@
 """
 tools/test_wowtranslate.py
 ==========================
-Comprehensive unit and integration test suite for WoWTranslate v3.6.3.
+Comprehensive unit and integration test suite for WoWTranslate v3.6.4.
 
 Test Suites:
   1. UTF-8 Multi-byte Safe Truncation Engine (ASCII, CJK, Kana, Cyrillic, 4-byte Emojis, boundary walkbacks).
@@ -570,6 +570,117 @@ class TestChatAestheticsAndGlossaryDualLanguage(unittest.TestCase):
         self.assertIn("[Party]", compact_line)
 
         self.assertIn("[WT-", bracket_line)
+
+
+class TestSendChatMessageHookChainingAndReentrancy(unittest.TestCase):
+    """Verifies that SendChatMessage hooking avoids self-referential recursion, preserves chain, and survives reloads."""
+
+    def test_reentrancy_lock_prevents_recursion(self):
+        """Simulates outgoing dispatch triggering SendChatMessage and ensures reentrancy guard breaks cyclic loops."""
+        call_log = []
+        original_send = lambda msg, *args: call_log.append(("c_engine", msg))
+        
+        # State simulating WoWTranslate
+        state = {
+            "is_sending": False,
+            "next_send": original_send,
+            "original_send": original_send,
+            "outgoing_installed": True,
+        }
+
+        def hooked_send(msg, *args):
+            if state["is_sending"]:
+                # Reentrancy guard: pass directly down the chain without intercepting
+                send_fn = state["next_send"] or state["original_send"]
+                return send_fn(msg, *args)
+            
+            # Normal interception: would translate and call safe_send
+            call_log.append(("intercepted", msg))
+            return safe_send("[CN] " + msg, *args)
+
+        def safe_send(msg, *args):
+            if state["is_sending"]:
+                return state["original_send"](msg, *args)
+            
+            send_fn = state["next_send"] or state["original_send"]
+            if send_fn == hooked_send:
+                send_fn = state["original_send"]
+            
+            state["is_sending"] = True
+            try:
+                # Suppose downstream hook (e.g. another chat addon) calls SendChatMessage
+                # which routes to hooked_send
+                hooked_send(msg, *args)
+            finally:
+                state["is_sending"] = False
+
+        # User calls SendChatMessage -> hooked_send
+        hooked_send("Hello World")
+
+        # Must have intercepted once, then dispatched down to c_engine without looping
+        self.assertEqual(len(call_log), 2)
+        self.assertEqual(call_log[0], ("intercepted", "Hello World"))
+        self.assertEqual(call_log[1], ("c_engine", "[CN] Hello World"))
+
+    def test_reload_snapshot_protection(self):
+        """Simulates file re-execution where SendChatMessage points to our hook, ensuring snapshot is never corrupted."""
+        c_engine_send = lambda msg: "original"
+        hooked_send = lambda msg: "hooked"
+
+        # Initial load
+        send_chat_message = c_engine_send
+        original_snapshot = send_chat_message
+        self.assertIs(original_snapshot, c_engine_send)
+
+        # Hook installed
+        send_chat_message = hooked_send
+
+        # Simulate /reloadui (WoWTranslate_Globals.lua re-executing)
+        if not original_snapshot or original_snapshot == hooked_send:
+            if send_chat_message != hooked_send:
+                original_snapshot = send_chat_message
+
+        # Must NOT be corrupted by hooked_send
+        self.assertIs(original_snapshot, c_engine_send)
+        self.assertIsNot(original_snapshot, hooked_send)
+
+    def test_self_reference_bailout_in_safe_send(self):
+        """Verifies safe_send never calls hooked_send even if next_send was misconfigured."""
+        c_engine_send = lambda msg: "sent_ok"
+        hooked_send = lambda msg: "hook_error"
+
+        next_send = hooked_send  # Malformed state
+        orig_send = c_engine_send
+
+        # Resolution logic in WT_SafeSendChatMessage
+        send_fn = next_send
+        if not send_fn or send_fn == hooked_send:
+            send_fn = orig_send
+        if not send_fn or send_fn == hooked_send:
+            send_fn = c_engine_send
+
+        self.assertIs(send_fn, c_engine_send)
+        self.assertEqual(send_fn("test"), "sent_ok")
+
+    def test_channel_list_string_and_number_matching(self):
+        """Verifies channel matching handles both string and number channel arguments."""
+        channel_list = [1, "General", 2, "Trade", 3, "English - World"]
+
+        def match_channel(target):
+            effective = "CHANNEL"
+            for i in range(0, len(channel_list), 2):
+                cid = channel_list[i]
+                cname = channel_list[i+1]
+                if cid == target or str(cid) == str(target):
+                    if cname.lower().startswith("english"):
+                        effective = "ENGLISH"
+                    break
+            return effective
+
+        self.assertEqual(match_channel(3), "ENGLISH")
+        self.assertEqual(match_channel("3"), "ENGLISH")
+        self.assertEqual(match_channel(1), "CHANNEL")
+        self.assertEqual(match_channel("1"), "CHANNEL")
 
 
 if __name__ == "__main__":

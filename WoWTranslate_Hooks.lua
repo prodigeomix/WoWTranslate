@@ -4,12 +4,9 @@
 -- CHAT FRAME HOOKING
 -- ============================================================================
 
--- C3 fix: forward-declare WT_nextSendChatMessage as an upvalue so all
--- functions in this file (defined before OR after the install/uninstall
--- functions) share the same storage.  Without this, the `local` declared
--- later in the file would not be visible to WT_SafeSendChatMessage, which
--- is defined earlier — they'd silently use different storage locations.
-local WT_nextSendChatMessage
+-- Outgoing SendChatMessage reentrancy lock: prevents cyclic re-entry when
+-- WT_SafeSendChatMessage dispatches through the hook chain.
+local WT_isSendingOutgoing = false
 
 
 -- Maps event to ChatTypeInfo key so we can read the native channel color.
@@ -802,18 +799,61 @@ end
 
 
 function WT_SafeSendChatMessage(msg, chatType, language, channel)
-    -- C3 fix: call through the chain (WT_nextSendChatMessage) when our hook
+    -- Reentrancy safety: prevent recursive loops if the hooked SendChatMessage
+    -- or any other hook in the chain re-triggers an outgoing message dispatch.
+    if WT_isSendingOutgoing then
+        local baseSend = WT_originalSendChatMessage
+        if baseSend and baseSend ~= WT_HookedSendChatMessage then
+            if channel ~= nil then
+                return baseSend(msg, chatType, language, channel)
+            elseif language ~= nil then
+                return baseSend(msg, chatType, language)
+            elseif chatType ~= nil then
+                return baseSend(msg, chatType)
+            else
+                return baseSend(msg)
+            end
+        end
+        return
+    end
+
+    -- Call through the chain (WT_nextSendChatMessage) when our hook
     -- is installed, so other addons' wrappers stay in the chain.  Fall back
-    -- to the original snapshot if our hook is not installed.
-    local sendFn = WT_nextSendChatMessage or WT_originalSendChatMessage
+    -- to the original snapshot if our hook is not installed or points to our wrapper.
+    local sendFn = WT_nextSendChatMessage
+    if not sendFn or sendFn == WT_HookedSendChatMessage then
+        sendFn = WT_originalSendChatMessage
+    end
+    if not sendFn or sendFn == WT_HookedSendChatMessage then
+        if SendChatMessage ~= WT_HookedSendChatMessage then
+            sendFn = SendChatMessage
+        end
+    end
+
+    if not sendFn or sendFn == WT_HookedSendChatMessage then
+        WT_DebugLog("WT_SafeSendChatMessage: no valid non-hooked send function available")
+        return
+    end
+
+    WT_isSendingOutgoing = true
+
+    local ok, ret
     if channel ~= nil then
-        return sendFn(msg, chatType, language, channel)
+        ok, ret = pcall(sendFn, msg, chatType, language, channel)
     elseif language ~= nil then
-        return sendFn(msg, chatType, language)
+        ok, ret = pcall(sendFn, msg, chatType, language)
     elseif chatType ~= nil then
-        return sendFn(msg, chatType)
+        ok, ret = pcall(sendFn, msg, chatType)
     else
-        return sendFn(msg)
+        ok, ret = pcall(sendFn, msg)
+    end
+
+    WT_isSendingOutgoing = false
+
+    if ok then
+        return ret
+    else
+        WT_DebugLog("WT_SafeSendChatMessage dispatch failed:", ret)
     end
 end
 
@@ -840,6 +880,28 @@ end
 
 -- Hooked SendChatMessage for outgoing translation
 function WT_HookedSendChatMessage(msg, chatType, language, channel)
+    -- Reentrancy guard: if WT_SafeSendChatMessage is currently dispatching a message,
+    -- or if an addon down the chain calls SendChatMessage, do not intercept or queue.
+    -- Pass it directly to the underlying sender so we never loop.
+    if WT_isSendingOutgoing then
+        local sendFn = WT_nextSendChatMessage
+        if not sendFn or sendFn == WT_HookedSendChatMessage then
+            sendFn = WT_originalSendChatMessage
+        end
+        if sendFn and sendFn ~= WT_HookedSendChatMessage then
+            if channel ~= nil then
+                return sendFn(msg, chatType, language, channel)
+            elseif language ~= nil then
+                return sendFn(msg, chatType, language)
+            elseif chatType ~= nil then
+                return sendFn(msg, chatType)
+            else
+                return sendFn(msg)
+            end
+        end
+        return
+    end
+
     -- Handle nil chatType (WoW 1.12 compatibility)
     if not chatType then
         WT_DebugLog("chatType is nil, sending original")
@@ -867,7 +929,7 @@ function WT_HookedSendChatMessage(msg, chatType, language, channel)
         -- iterate GetChannelList() instead (returns id, name, id, name, ...).
         local list = {GetChannelList()}
         for i = 1, table.getn(list), 2 do
-            if list[i] == channel then
+            if list[i] == channel or tostring(list[i]) == tostring(channel) then
                 if string.find(string.lower(list[i+1] or ""), "^english") then
                     effectiveOutChannel = "ENGLISH"
                 end
@@ -1083,37 +1145,26 @@ end
 -- addons and they don't clobber us.
 
 -- Track if hook is installed (for diagnostics).
--- MUST be a global (not local) so it survives UI reloads.  A local resets
--- to false every time the file is re-executed, causing the install guard
--- below to be skipped while SendChatMessage already points to our wrapper —
--- resulting in WT_nextSendChatMessage -> WT_HookedSendChatMessage -> infinite
--- recursion and a stack overflow.
+-- MUST be a global (not local) so it survives UI reloads.
 if WT_outgoingHookInstalled == nil then
     WT_outgoingHookInstalled = false
 end
--- WT_nextSendChatMessage is forward-declared at the top of this file so all
--- functions share the same upvalue.  It holds the function that was installed
--- on SendChatMessage at install time (could be the Blizzard global or another
--- addon's wrapper); we call through it so other addons stay in the chain.
 
 -- Install the outgoing message hook
 function WT_InstallOutgoingHook()
-    if WT_outgoingHookInstalled then return end
-    -- Belt-and-suspenders: if SendChatMessage is already our hook (e.g.
-    -- after a UI reload reset the old local guard to false) then do NOT
-    -- capture it as WT_nextSendChatMessage — that would create a direct
-    -- self-referential loop and cause an immediate stack overflow.
+    -- Belt-and-suspenders: if SendChatMessage is already our hook, never chain to ourselves
     if SendChatMessage == WT_HookedSendChatMessage then
-        WT_DebugLog("InstallOutgoingHook: already installed (stale guard), skipping")
         WT_outgoingHookInstalled = true
-        -- WT_nextSendChatMessage should already point to the real sender;
-        -- if it was cleared (e.g. RemoveOutgoingHook ran first), restore it
-        -- from the original snapshot so SafeSend can still dispatch.
-        if not WT_nextSendChatMessage then
+        if not WT_nextSendChatMessage or WT_nextSendChatMessage == WT_HookedSendChatMessage then
             WT_nextSendChatMessage = WT_originalSendChatMessage
         end
         return
     end
+
+    if WT_outgoingHookInstalled and WT_nextSendChatMessage and WT_nextSendChatMessage ~= WT_HookedSendChatMessage then
+        return
+    end
+
     WT_DebugLog("Installing outgoing SendChatMessage hook (chain)")
     -- Capture whatever is currently installed — could be the Blizzard global
     -- or another addon's wrapper.  We call through it so its behavior is
@@ -1126,13 +1177,13 @@ end
 -- Remove the outgoing message hook
 function WT_RemoveOutgoingHook()
     if not WT_outgoingHookInstalled then return end
-    -- Only restore if our wrapper is still on top.  If another addon wrapped
-    -- on top of us, we leave their wrapper in place (they own the global now)
-    -- but mark ourselves as uninstalled so WT_IsOutgoingHookActive reports
-    -- false and we stop calling through the chain.
     WT_DebugLog("Removing outgoing SendChatMessage hook")
     if SendChatMessage == WT_HookedSendChatMessage then
-        SendChatMessage = WT_nextSendChatMessage or WT_originalSendChatMessage
+        local restoreFn = WT_nextSendChatMessage
+        if not restoreFn or restoreFn == WT_HookedSendChatMessage then
+            restoreFn = WT_originalSendChatMessage
+        end
+        SendChatMessage = restoreFn
     end
     WT_nextSendChatMessage = nil
     WT_outgoingHookInstalled = false
@@ -1140,6 +1191,6 @@ end
 
 -- Check if hook is active (for diagnostics)
 function WT_IsOutgoingHookActive()
-    return WT_outgoingHookInstalled and SendChatMessage == WT_HookedSendChatMessage
+    return WT_outgoingHookInstalled and (SendChatMessage == WT_HookedSendChatMessage or WT_nextSendChatMessage ~= nil)
 end
 

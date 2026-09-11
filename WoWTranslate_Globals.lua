@@ -28,7 +28,14 @@ WT_messageCounter = 0
 -- Outgoing translation state
 WT_outgoingQueue = {}
 WT_outgoingCounter = 0
-WT_originalSendChatMessage = SendChatMessage
+if not WT_originalSendChatMessage or WT_originalSendChatMessage == WT_HookedSendChatMessage then
+    if SendChatMessage ~= WT_HookedSendChatMessage then
+        WT_originalSendChatMessage = SendChatMessage
+    end
+end
+if WT_nextSendChatMessage == WT_HookedSendChatMessage then
+    WT_nextSendChatMessage = nil
+end
 
 -- Waiters for in-flight player/guild name translations (rawName -> { callbacks = {} })
 WT_pendingNameTranslations = {}
