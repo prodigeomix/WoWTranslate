@@ -32,7 +32,11 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
         if isAvail then
             transportStr = "|cFF00FF00" .. WoWTranslate_API.GetTransportName() .. " (Connected)|r"
         else
-            transportStr = "|cFFFF0000Not Connected (Start wow_proxy.py or start_proxy.bat)|r"
+            if WoWTranslate_API and not WoWTranslate_API.HasAnyTransportCapability() then
+                transportStr = "|cFFFF4444No Client Transport (SuperWoW not detected - install SuperWoW)|r"
+            else
+                transportStr = "|cFFFF0000Not Connected (Start wow_proxy.py or start_proxy.bat)|r"
+            end
         end
 
         local cacheStats = WoWTranslate_CacheStats()
@@ -107,7 +111,11 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
         end
 
         if not WoWTranslate_API.IsAvailable() then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WoWTranslate] Translation service not connected. Please start wow_proxy.py or start_proxy.bat!|r")
+            if WoWTranslate_API and not WoWTranslate_API.HasAnyTransportCapability() then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[WoWTranslate] SuperWoW not detected! SuperWoW is required to communicate with wow_proxy.py.|r")
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WoWTranslate] Translation service not connected. Please start wow_proxy.py or start_proxy.bat!|r")
+            end
             return
         end
 
@@ -290,7 +298,11 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
         end
 
         if not WoWTranslate_API.IsAvailable() then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WoWTranslate] Translation service not connected. Please start wow_proxy.py or start_proxy.bat!|r")
+            if WoWTranslate_API and not WoWTranslate_API.HasAnyTransportCapability() then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[WoWTranslate] SuperWoW not detected! SuperWoW is required to communicate with wow_proxy.py.|r")
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WoWTranslate] Translation service not connected. Please start wow_proxy.py or start_proxy.bat!|r")
+            end
             return
         end
 
@@ -317,7 +329,11 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
         if ok then
             DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Reset OK — hooks reinstalled, transport: " .. WoWTranslate_API.GetTransportName() .. ", cleared " .. cleared .. " stale request(s)|r")
         else
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00[WoWTranslate] Reset: hooks reinstalled. Backend not detected — make sure wow_proxy.py is running!|r")
+            if WoWTranslate_API and not WoWTranslate_API.HasAnyTransportCapability() then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[WoWTranslate] Reset: hooks reinstalled. No client transport (SuperWoW not detected)! SuperWoW is required.|r")
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00[WoWTranslate] Reset: hooks reinstalled. Backend not detected — make sure wow_proxy.py is running!|r")
+            end
         end
 
     elseif cmd == "hooktest" then
@@ -490,10 +506,14 @@ function WT_OnAddonLoaded()
     if isAvail then
         statusText = "|cFF00FF00" .. WoWTranslate_API.GetTransportName() .. " OK|r"
     else
-        statusText = "|cFFFFFF00Backend not connected (Run start_proxy.bat)|r"
+        if WoWTranslate_API and not WoWTranslate_API.HasAnyTransportCapability() then
+            statusText = "|cFFFF4444No client transport (SuperWoW required)|r"
+        else
+            statusText = "|cFFFFFF00Backend not connected (Run start_proxy.bat)|r"
+        end
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.4 - " .. statusText .. " | /wt show")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.5 - " .. statusText .. " | /wt show")
 end
 
 -- ============================================================================

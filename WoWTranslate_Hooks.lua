@@ -678,7 +678,11 @@ function WT_HookChatFrames(force)
                             if not WoWTranslate_API or not WoWTranslate_API.IsAvailable() then
                                 if not WT_dllWarnShown then
                                     WT_dllWarnShown = true
-                                    capturedThis:AddMessage("|cFFFFFF00[WoWTranslate] Translation service not connected - run /wt status (start_proxy.bat)|r")
+                                    if WoWTranslate_API and not WoWTranslate_API.HasAnyTransportCapability() then
+                                        capturedThis:AddMessage("|cFFFF4444[WoWTranslate] SuperWoW not detected! SuperWoW is required for translation (see README.md).|r")
+                                    else
+                                        capturedThis:AddMessage("|cFFFFFF00[WoWTranslate] Translation service not connected - run /wt status (start_proxy.bat)|r")
+                                    end
                                 end
                                 WT_ChatFrame_FlushOriginal(capturedThis)
                                 return

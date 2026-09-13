@@ -1,4 +1,4 @@
-# 🌐 WoWTranslate v3.6.0 — Universal Real-Time Chat & Tooltip Translator
+# 🌐 WoWTranslate v3.6.5 — Universal Real-Time Chat & Tooltip Translator
 ### World of Warcraft 1.12.1 (Vanilla / Turtle WoW Patch 1.18.1)
 
 [![CI Build](https://github.com/prodigeomix/WoWTranslate/actions/workflows/ci.yml/badge.svg)](https://github.com/prodigeomix/WoWTranslate/actions/workflows/ci.yml)
@@ -13,6 +13,20 @@
 Translate World of Warcraft chat, player names, group finder, and tooltips in real-time between **Chinese, English, Spanish, Russian, Japanese, and Korean** directly inside your game!
 
 WoWTranslate is **local-first** using **Ollama** (your own private AI model) with optional automatic cloud fallback (Google Translate / DeepL / OpenAI). It is completely free, private, has zero monthly limits, and offers real-time translations (instant SQLite cache, ~50ms–200ms local AI inference).
+
+---
+
+## 📌 Requirements & Prerequisites
+
+Before setting up WoWTranslate, please make sure you have:
+1. **World of Warcraft 1.12.1 Client** (Vanilla or Turtle WoW 1.18.1).
+2. ⚠️ **SuperWoW (Client File I/O Transport — Required)**:
+   - Blizzard's original 1.12.1 client strictly sandboxes Lua (`io.open` is disabled).
+   - WoWTranslate relies on **SuperWoW** (`ExportFile` / `ImportFile`) to securely exchange translation requests between the game and `wow_proxy.py`.
+   - **Turtle WoW players:** Make sure SuperWoW is enabled/present in your Turtle WoW launcher/directory.
+   - **Vanilla 1.12.1 players:** Download and install [SuperWoW](https://github.com/balakethelock/SuperWoW) into your World of Warcraft directory. *(Alternatively, UnitXP SP3 is also supported).*
+3. **Python 3.10+** (Required to run the local background proxy `wow_proxy.py`).
+4. **Ollama** (Recommended to run the local AI translation model on your PC).
 
 ---
 
@@ -109,13 +123,15 @@ To download the AI translation brain onto your computer, run a single command in
 3. A small black window will open and say:
    ```text
    ==========================================================
-      WoWTranslate Universal Proxy v3.6.0
+      WoWTranslate Universal Proxy v3.6.5
      Backends     : ['ollama', 'google']
    ==========================================================
    [proxy] Ready! Proxy is actively listening for translations.
    ```
 4. **Leave this window open (minimized) while you play WoW.**
-5. Launch World of Warcraft and enjoy instant translation!
+5. Launch World of Warcraft (with SuperWoW enabled) and enjoy instant translation!
+
+> 💡 **Client Verification:** Once logged in, type `/wt diag` in chat. If it displays `Active Transport: SuperWoW File IPC (Proxy)` with `IO Test: PASS`, your game client and proxy are successfully connected!
 
 ---
 
@@ -233,7 +249,10 @@ This error means Ollama is running, but the **model name in `config.toml` does n
 - You don't need to do anything! WoWTranslate has a built-in automatic fallback to Google Web Translate. You can also comment out the `[[backends]]` section for Ollama in `config.toml` to exclusively use Google.
 
 #### 4. How do I know if the proxy is connected to the game?
-- In game, type `/wt diag` in chat. If it says `Active Transport: SuperWoW File IPC (Proxy)` with `IO Test: PASS`, you are 100% connected!
+- In game, type `/wt diag` in chat:
+  - **`Active Transport: SuperWoW File IPC (Proxy)`** with **`IO Test: PASS`**: You are 100% connected and ready!
+  - **`Active Transport: None`** and **`SuperWoW IO: NO`**: SuperWoW is not active in your client. Verify that SuperWoW is installed in your game directory or enabled in the Turtle WoW launcher.
+  - **`Backend not detected`**: The proxy is not responding. Double-click `start_proxy.bat` in your addon directory.
 
 #### 5. How fast is it?
 - Translations for previously seen messages and player names load **instantly (< 1ms)** from your local SQLite cache (`translations.db`).

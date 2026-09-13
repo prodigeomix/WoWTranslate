@@ -1,5 +1,5 @@
 -- WoWTranslate_API.lua
--- Universal Multi-Transport API for WoWTranslate (v3.6.4)
+-- Universal Multi-Transport API for WoWTranslate (v3.6.5)
 -- Supports SuperWoW (Imports\req_*.txt), Standard Lua IO (WoWTranslate\IPC\), and UnitXP C++ DLL.
 --
 -- Transports:
@@ -318,6 +318,11 @@ function WoWTranslate_API.GetTransportName()
         return "None"
     end
 end
+
+function WoWTranslate_API.HasAnyTransportCapability()
+    return HasSuperWoW() or HasLuaIO() or HasUnitXP()
+end
+
 
 -- ============================================================================
 -- DEMAND-BASED POLLING

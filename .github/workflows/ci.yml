@@ -43,3 +43,26 @@ jobs:
 
       - name: Run Full Forensic Audit Verification Suite
         run: python tools/run_audit_checks.py
+
+      - name: Display Installation Instructions & Prerequisites in Job Summary
+        if: matrix.python-version == '3.12'
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          # 🌐 WoWTranslate Installation Instructions & Prerequisites
+
+          ### 📌 Prerequisites & Client Requirements
+          1. **World of Warcraft 1.12.1 Client** (Vanilla or Turtle WoW 1.18.1).
+          2. ⚠️ **SuperWoW (Client File I/O Transport — Required)**:
+             - Blizzard 1.12.1 sandboxes Lua (\`io.open\` is disabled). SuperWoW injects \`ExportFile\`/\`ImportFile\` hooks so the addon can communicate with \`wow_proxy.py\`.
+             - **Turtle WoW:** SuperWoW is supported natively. Make sure SuperWoW is enabled in your Turtle WoW launcher/directory.
+             - **Vanilla 1.12.1:** Download and install [SuperWoW](https://github.com/balakethelock/SuperWoW) into your World of Warcraft directory. *(Alternatively, UnitXP SP3 is also supported).*
+          3. **Python 3.10+** (Required to run the local background proxy \`start_proxy.bat\`).
+          4. **Ollama** (Recommended offline AI translation engine: \`ollama pull qwen2.5:3b\`).
+
+          ### 🚀 Quick Start Setup
+          1. Extract the \`WoWTranslate\` folder into \`World of Warcraft\\Interface\\AddOns\\\`.
+          2. Double-click \`start_proxy.bat\` inside \`Interface\\AddOns\\WoWTranslate\\\`.
+          3. Launch World of Warcraft (with SuperWoW active) and type \`/wt diag\` to verify the connection (\`Active Transport: SuperWoW File IPC (Proxy)\`).
+
+          Full documentation & troubleshooting: [README.md](https://github.com/prodigeomix/WoWTranslate/blob/main/README.md)
+          EOF
