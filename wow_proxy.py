@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.6.6  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.6.7  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -54,7 +54,7 @@ if sys.platform == "win32":
     except (AttributeError, io.UnsupportedOperation, OSError):
         pass
 
-VERSION = "3.6.6"
+VERSION = "3.6.7"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
@@ -241,6 +241,13 @@ def cache_purge_code_switched(db_path):
         return 0
     bad = []
     for h, fl, tl, result in rows:
+        # Purge untranslated echoes: target is Chinese, but result has zero CJK and contains non-preserved English words
+        if tl.lower() in ("zh", "chinese") and not re.search(r"[\u3400-\u9fff]", result or ""):
+            words = [w.lower() for w in re.findall(r"[A-Za-z]{3,}", result or "")]
+            if any(w not in _PRESERVE_TERMS for w in words):
+                bad.append((h, fl, tl))
+                continue
+
         # Only inspect pairs whose target is a non-Latin script; skip pure-EN targets.
         if not re.search(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff]", result or ""):
             continue
@@ -291,6 +298,39 @@ def _is_ollama_online(url="http://localhost:11434/api/tags"):
         _ollama_last_check = now
         return _ollama_online
 
+LLM_LANG_MAP = {
+    "zh": "Chinese",
+    "en": "English",
+    "ru": "Russian",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "de": "German",
+    "fr": "French",
+    "es": "Spanish",
+    "pt": "Portuguese",
+}
+
+def _build_llm_system_prompt(from_lang, to_lang):
+    src_lang = LLM_LANG_MAP.get(str(from_lang).lower(), str(from_lang))
+    tgt_lang = LLM_LANG_MAP.get(str(to_lang).lower(), str(to_lang))
+    if str(src_lang).lower() == "auto":
+        src_lang = "the source language (auto-detect it)"
+
+    prompt = (
+        f"You are a specialized real-time translator for World of Warcraft Classic.\n"
+        f"Translate accurately from {src_lang} to {tgt_lang} using natural MMORPG terminology.\n\n"
+        f"Rules:\n"
+        f"1. Non-Native Chat & Slang: In World of Warcraft, players frequently use non-native English, typos, missing grammar, and gaming shorthand (e.g., 'dispawn' -> despawn, 'sum' -> summon, 'res/rez' -> resurrect, 'plz' -> please). Accurately infer the intended gamer meaning and terminology:\n"
+        f"   - Roles: '来' -> 'LF / need', 'T' -> 'Tank', 'N' / '奶' / '奶妈' -> 'Healer', 'D' / '输出' -> 'DPS', 'TN' -> 'Tank/Healer', 'TND' -> 'Tank/Healer/DPS', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)'.\n"
+        f"   - Actions: '拉' -> 'summon', '开门' -> 'portal', '邮箱' -> 'mailbox', '有坑' -> 'has spot', '+' or '1' -> 'invite/inv', '重登' -> 'relog', '打信' -> 'turn in texts', '卡' -> 'stuck/lag', '灭' -> 'wipe', '开打' -> 'start/pull'.\n"
+        f"   - Spawns & Resets: '刷新' / '刷' -> 'respawn / refresh / spawn', '消失' / '脱战' -> 'despawn / reset / drop aggro', '复活' -> 'resurrect / respawn'.\n"
+        f"2. Conversational Polarity: Accurately translate negative replies in context (e.g., '没有 失败了' -> 'Nope, failed' / 'No, we failed', '没有 灭了' -> 'Nope, wiped').\n"
+        f"3. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
+        f"4. Mixed Chat: If text mixes multiple languages (e.g., '卡Dead', 'not ready次', '净化r'), preserve gaming terms and translate surrounding vernacular into {tgt_lang}.\n"
+        f"5. Mandatory Target Output: You MUST ALWAYS output the final translation in {tgt_lang}. NEVER output in {src_lang}. Never edit, autocorrect, or rewrite text in the source language — even if the input has typos or broken grammar, translate the meaning into {tgt_lang}. Output strictly the raw translated text. Mirror the input line-for-line. No conversational replies, no roleplay, no explanations, no quotes, and no added prefixes."
+    )
+    return prompt, src_lang, tgt_lang
+
 def _call_ollama(text, from_lang, to_lang, backend):
     raw_url = backend.get("url", "http://localhost:11434").rstrip("/")
     if raw_url.endswith(("/api/generate", "/api/chat")):
@@ -304,32 +344,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
     if not _is_ollama_online(tags_url):
         raise ConnectionRefusedError(f"Ollama is not responding at {base_url} (ensure 'ollama serve' or Ollama desktop app is running)")
 
-    lang_map = {
-        "zh": "Chinese",
-        "en": "English",
-        "ru": "Russian",
-        "ja": "Japanese",
-        "ko": "Korean",
-        "de": "German",
-        "fr": "French",
-        "es": "Spanish",
-        "pt": "Portuguese",
-    }
-    src_lang = lang_map.get(from_lang.lower(), from_lang)
-    tgt_lang = lang_map.get(to_lang.lower(), to_lang)
-    if src_lang.lower() == "auto":
-        # LLM backends have no native auto-detect; instruct the model instead.
-        src_lang = "the source language (auto-detect it)"
-
-    system_prompt = (
-        f"You are a specialized real-time translator for World of Warcraft Classic.\n"
-        f"Translate accurately from {src_lang} to {tgt_lang} using natural MMORPG terminology.\n\n"
-        f"Rules:\n"
-        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., '来' -> 'LF / need', 'T' -> 'Tank', 'N'/'奶' -> 'Healer', 'D'/'输出' -> 'DPS', 'TND' -> 'Tank/Healer/DPS', 'TN' -> 'Tank/Healer', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)', '拉' -> 'summon', '开门' -> 'portal', '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts, '卡' -> 'stuck/lag').\n"
-        f"2. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
-        f"3. Mixed Chat: If text mixes multiple languages (e.g., '卡Dead', 'not ready次'), preserve standard gaming terms and translate surrounding vernacular into {tgt_lang}.\n"
-        f"4. Direct Translation Only: Output strictly the raw translated text. Mirror the input line-for-line. No conversational replies, no roleplay, no explanations, no quotes, and no added prefixes."
-    )
+    system_prompt, src_lang, tgt_lang = _build_llm_system_prompt(from_lang, to_lang)
 
     model = backend.get("model", "qwen2.5:3b")
     timeout = backend.get("timeout", 20)
@@ -352,7 +367,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
             "options": {
                 "temperature": temperature,
                 "num_predict": num_predict,
-                "stop": ["\n\n", "Player:", "NPC:", "<chat>", "</chat>"],
+                "stop": ["\n\n", "Player:", "NPC:", "</chat>"],
             },
         }).encode("utf-8")
 
@@ -380,7 +395,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
                 "options": {
                     "temperature": temperature,
                     "num_predict": num_predict,
-                    "stop": ["\n\n", "Player:", "NPC:", "<chat>", "</chat>"],
+                    "stop": ["\n\n", "Player:", "NPC:", "</chat>"],
                 },
             }).encode("utf-8")
 
@@ -466,20 +481,12 @@ def _call_openai(text, from_lang, to_lang, backend):
     base_url = backend.get("base_url", "https://api.openai.com/v1").rstrip("/")
     model = backend.get("model", "gpt-4o-mini")
     timeout = backend.get("timeout", 10)
-    system = (
-        f"You are a specialized real-time translator for World of Warcraft Classic.\n"
-        f"Translate accurately from {from_lang} to {to_lang} using natural MMORPG terminology.\n\n"
-        f"Rules:\n"
-        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., '来' -> 'LF / need', 'T' -> 'Tank', 'N'/'奶' -> 'Healer', 'D'/'输出' -> 'DPS', 'TND' -> 'Tank/Healer/DPS', 'TN' -> 'Tank/Healer', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)', '拉' -> 'summon', '开门' -> 'portal', '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts, '卡' -> 'stuck/lag').\n"
-        f"2. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
-        f"3. Mixed Chat: If text mixes multiple languages (e.g., '卡Dead', 'not ready次'), preserve standard gaming terms and translate surrounding vernacular into {to_lang}.\n"
-        f"4. Direct Translation Only: Output strictly the raw translated text. Mirror the input line-for-line. No conversational replies, no roleplay, no explanations, no quotes, and no added prefixes."
-    )
+    system, src_lang, tgt_lang = _build_llm_system_prompt(from_lang, to_lang)
     payload = json.dumps({
         "model": model,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": f"Translate this World of Warcraft chat message into {to_lang}. Output only the translation:\n<chat>{text}</chat>"},
+            {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output only the translation:\n<chat>{text}</chat>"},
         ],
         "max_tokens": 256,
         "temperature": 0.1,
@@ -567,16 +574,7 @@ def _call_gemini(text, from_lang, to_lang, backend):
 
     model = backend.get("model", "gemini-2.5-flash")
     timeout = backend.get("timeout", 10)
-    
-    system_prompt = (
-        f"You are a specialized real-time translator for World of Warcraft Classic.\n"
-        f"Translate accurately from {from_lang} to {to_lang} using natural MMORPG terminology.\n\n"
-        f"Rules:\n"
-        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., '来' -> 'LF / need', 'T' -> 'Tank', 'N'/'奶' -> 'Healer', 'D'/'输出' -> 'DPS', 'TND' -> 'Tank/Healer/DPS', 'TN' -> 'Tank/Healer', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)', '拉' -> 'summon', '开门' -> 'portal', '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts, '卡' -> 'stuck/lag').\n"
-        f"2. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
-        f"3. Mixed Chat: If text mixes multiple languages (e.g., '卡Dead', 'not ready次'), preserve standard gaming terms and translate surrounding vernacular into {to_lang}.\n"
-        f"4. Direct Translation Only: Output strictly the raw translated plain text. Mirror the input line-for-line. No conversational replies, no roleplay, no markdown bolding, no explanations, no commentary, and no added prefixes."
-    )
+    system_prompt, src_lang, tgt_lang = _build_llm_system_prompt(from_lang, to_lang)
 
     safety_settings = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -589,7 +587,7 @@ def _call_gemini(text, from_lang, to_lang, backend):
         "contents": [
             {
                 "parts": [
-                    {"text": f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {to_lang}. Output only the translation:\n<chat>{text}</chat>"}
+                    {"text": f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output only the translation:\n<chat>{text}</chat>"}
                 ]
             }
         ],
@@ -693,6 +691,17 @@ def _looks_code_switched(source_text, translated_text, min_len=4):
         if (ord(before) > 0x2FFF and not before.isascii()
                 and ord(after) > 0x2FFF and not after.isascii()):
             return True
+def _looks_untranslated(source_text, translated_text, from_lang, to_lang):
+    """True if LLM echoed or autocorrected in source language instead of translating to target script."""
+    if not source_text or not translated_text:
+        return False
+    tgt = str(to_lang).lower()
+    # If target is Chinese, ensure at least one CJK character exists if source had non-preserve words
+    if tgt in ("zh", "chinese"):
+        if not re.search(r"[\u3400-\u9fff]", translated_text):
+            src_words = [w.lower() for w in re.findall(r"[A-Za-z]{3,}", source_text)]
+            if any(w not in _PRESERVE_TERMS for w in src_words):
+                return True
     return False
 
 
@@ -718,14 +727,18 @@ def translate(text, from_lang, to_lang, backends):
                     result = re.sub(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]+$", "", result).strip()
                 # Sanitize wire format separator | to /
                 result = result.replace("|", "/")
-                # Code-switching sanity pass (LLM backends only): if the output
-                # left ordinary source words untranslated, prefer another backend.
-                if btype in ("ollama", "openai", "gemini", "deepl") and _looks_code_switched(text, result):
-                    print(f"[translate] [{btype}] suspected code-switching (untranslated English word), trying next backend")
-                    if fallback_result is None:
-                        fallback_result = result
-                    last_err = f"{btype}: suspected code-switching"
-                    continue
+                # Code-switching & untranslated echo pass (LLM backends only): if the output
+                # left ordinary source words untranslated or echoed English, prefer another backend.
+                if btype in ("ollama", "openai", "gemini", "deepl"):
+                    is_cs = _looks_code_switched(text, result)
+                    is_un = _looks_untranslated(text, result, from_lang, to_lang)
+                    if is_cs or is_un:
+                        reason = "suspected code-switching" if is_cs else "untranslated source echo"
+                        print(f"[translate] [{btype}] {reason}, trying next backend")
+                        if fallback_result is None:
+                            fallback_result = result
+                        last_err = f"{btype}: {reason}"
+                        continue
                 # Formatted log with clean length limit
                 t_disp = (text[:50] + "...") if len(text) > 50 else text
                 r_disp = (result[:50] + "...") if len(result) > 50 else result

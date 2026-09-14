@@ -2,6 +2,26 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.7] - 2026-09-14
+
+### 🎯 Non-Native English & Typo Inference Engine
+- **Non-Native Chat & Broken Grammar Handling**: Explicitly instructed small local language models (Ollama Qwen 2.5 3B) and cloud LLMs (OpenAI, Gemini) that World of Warcraft players frequently communicate in non-native English, broken syntax, missing prepositions, and phonetic typos (e.g. `'dispawn'`, `'plz sum'`, `'res me'`, `'who have key'`).
+- **Strict Target Language Enforcement**: Enforced that the model must strictly output the translated text in the target language (`{tgt_lang}`) and never edit, autocorrect, or echo in the source language (preventing bugs where `'how long to dispawn'` was rewritten to English `'how long until despawn'` instead of Chinese `'还要多久才能消失'`).
+- **Conversational Polarity & MMORPG Shorthand**:
+  - Corrected negative reply context (e.g. `'没有 失败了'` $\to$ `'Nope, failed'`, rather than opposite `'No failure.'`).
+  - Mapped role and raid vocabulary (`'奶'` / `'奶妈'` $\to$ `'Healer'` instead of `'Nurse'`, `'开打'` $\to$ `'start/pull'`).
+- **Stop-Token Correction**: Removed `<chat>` from stop tokens to prevent premature stopping on opening chat brackets, fixing blank translations for bracketed PvP titles and player names (e.g. `'圣洁 [Knight-Lieutenant]'`).
+- **Centralized System Prompt Architecture**: Consolidated LLM prompt generation into `_build_llm_system_prompt()` with `LLM_LANG_MAP` across Ollama, OpenAI, and Gemini.
+
+### 🛡️ Untranslated Echo Detection & Cache Purging
+- **`_looks_untranslated` Guard**: Added automated verification in `translate()`. If any LLM backend ever returns pure Latin/English output for an English prompt targeting Chinese or Asian scripts, the proxy flags it as an untranslated echo and automatically fails over to the next backend (e.g. Google Web Translate).
+- **Startup Cache Sanitizer**: Enhanced `cache_purge_code_switched()` to automatically detect and purge any legacy untranslated echoes from `translations.db` on startup.
+
+### 🧪 Audit Certification
+- All 8 forensic audit verification suites passing cleanly with zero errors.
+
+---
+
 ## [v3.6.6] - 2026-09-14
 
 ### 🚀 LLM Prompt Hardening & SLM Optimization
