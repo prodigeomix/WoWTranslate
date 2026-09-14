@@ -325,10 +325,10 @@ def _call_ollama(text, from_lang, to_lang, backend):
         f"You are a specialized real-time translator for World of Warcraft Classic.\n"
         f"Translate accurately from {src_lang} to {tgt_lang} using natural MMORPG terminology.\n\n"
         f"Rules:\n"
-        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., '来' -> 'LF / need', 'T' -> 'Tank', 'N'/'奶' -> 'Healer', 'D'/'输出' -> 'DPS', 'TND' -> 'Tank/Healer/DPS', 'TN' -> 'Tank/Healer', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)', 'plsease' -> please, '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts).\n"
-        f"2. Full Translation: Translate EVERY ordinary word into the target language. Common vocabulary (e.g., everything, need, want, gold, run) must NEVER be left untranslated in the output.\n"
-        f"3. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
-        f"4. Output Format: Return ONLY the raw translated text. No explanations, quotes, markdown, conversational commentary, or channel prefixes."
+        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., '来' -> 'LF / need', 'T' -> 'Tank', 'N'/'奶' -> 'Healer', 'D'/'输出' -> 'DPS', 'TND' -> 'Tank/Healer/DPS', 'TN' -> 'Tank/Healer', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)', '拉' -> 'summon', '开门' -> 'portal', '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts, '卡' -> 'stuck/lag').\n"
+        f"2. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
+        f"3. Mixed Chat: If text mixes multiple languages (e.g., '卡Dead', 'not ready次'), preserve standard gaming terms and translate surrounding vernacular into {tgt_lang}.\n"
+        f"4. Direct Translation Only: Output strictly the raw translated text. Mirror the input line-for-line. No conversational replies, no roleplay, no explanations, no quotes, and no added prefixes."
     )
 
     model = backend.get("model", "qwen2.5:3b")
@@ -345,13 +345,14 @@ def _call_ollama(text, from_lang, to_lang, backend):
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text},
+                {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output only the translation:\n<chat>{text}</chat>"},
             ],
             "stream": False,
             "keep_alive": keep_alive,
             "options": {
                 "temperature": temperature,
                 "num_predict": num_predict,
+                "stop": ["\n\n", "Player:", "NPC:", "<chat>", "</chat>"],
             },
         }).encode("utf-8")
 
@@ -370,7 +371,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
     # 2. Fallback: /api/generate if /api/chat returned empty or was unavailable
     if not result:
         try:
-            prompt = f"{system_prompt}\n\nChat: {text}\nTranslation:"
+            prompt = f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output only the translation:\n<chat>{text}</chat>\nTranslation:"
             gen_payload = json.dumps({
                 "model": model,
                 "prompt": prompt,
@@ -379,6 +380,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
                 "options": {
                     "temperature": temperature,
                     "num_predict": num_predict,
+                    "stop": ["\n\n", "Player:", "NPC:", "<chat>", "</chat>"],
                 },
             }).encode("utf-8")
 
@@ -400,8 +402,12 @@ def _call_ollama(text, from_lang, to_lang, backend):
     result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
     # Strip leading "Translation:" prefix if model outputs it
     result = re.sub(r"^(?:Translation|Translated text|Output):\s*", "", result, flags=re.IGNORECASE).strip()
+    # Strip hallucinated roleplay prefixes like "Player: "
+    result = re.sub(r"^(?:Player|Character|NPC):\s*", "", result, flags=re.IGNORECASE).strip()
+    # Strip <chat> tags if echoed back
+    result = re.sub(r"</?chat>", "", result, flags=re.IGNORECASE).strip()
     # Strip markdown quotes or bolding (only when BOTH ends use the same wrapper
-# and the content is short enough that it's clearly model chatter, not speech)
+    # and the content is short enough that it's clearly model chatter, not speech)
     result = re.sub(r"^\*{2,}(.+)\*{2,}$", r"\1", result)  # **bold** only, not *emphasis*
     if len(result) <= 120:
         q = result[0]
@@ -464,16 +470,16 @@ def _call_openai(text, from_lang, to_lang, backend):
         f"You are a specialized real-time translator for World of Warcraft Classic.\n"
         f"Translate accurately from {from_lang} to {to_lang} using natural MMORPG terminology.\n\n"
         f"Rules:\n"
-        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., '来' -> 'LF / need', 'T' -> 'Tank', 'N'/'奶' -> 'Healer', 'D'/'输出' -> 'DPS', 'TND' -> 'Tank/Healer/DPS', 'TN' -> 'Tank/Healer', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)', 'plsease' -> please, '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts).\n"
-        f"2. Full Translation: Translate EVERY ordinary word into the target language. Common vocabulary (e.g., everything, need, want, gold, run) must NEVER be left untranslated in the output.\n"
-        f"3. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
-        f"4. Output Format: Return ONLY the raw translated text without quotes, markdown, explanations, or channel prefixes."
+        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., '来' -> 'LF / need', 'T' -> 'Tank', 'N'/'奶' -> 'Healer', 'D'/'输出' -> 'DPS', 'TND' -> 'Tank/Healer/DPS', 'TN' -> 'Tank/Healer', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)', '拉' -> 'summon', '开门' -> 'portal', '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts, '卡' -> 'stuck/lag').\n"
+        f"2. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
+        f"3. Mixed Chat: If text mixes multiple languages (e.g., '卡Dead', 'not ready次'), preserve standard gaming terms and translate surrounding vernacular into {to_lang}.\n"
+        f"4. Direct Translation Only: Output strictly the raw translated text. Mirror the input line-for-line. No conversational replies, no roleplay, no explanations, no quotes, and no added prefixes."
     )
     payload = json.dumps({
         "model": model,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": f"Translate from {from_lang} to {to_lang}: {text}"},
+            {"role": "user", "content": f"Translate this World of Warcraft chat message into {to_lang}. Output only the translation:\n<chat>{text}</chat>"},
         ],
         "max_tokens": 256,
         "temperature": 0.1,
@@ -489,7 +495,9 @@ def _call_openai(text, from_lang, to_lang, backend):
     choices = data.get("choices", [])
     if not choices:
         raise ValueError("OpenAI returned no choices")
-    return choices[0]["message"]["content"].strip()
+    res = choices[0]["message"]["content"].strip()
+    res = re.sub(r"</?chat>", "", res, flags=re.IGNORECASE).strip()
+    return res
 
 def _call_google(text, from_lang, to_lang, backend):
     """Free Google Translate web API fallback with multi-endpoint rotation against 429 rate limits."""
@@ -564,10 +572,10 @@ def _call_gemini(text, from_lang, to_lang, backend):
         f"You are a specialized real-time translator for World of Warcraft Classic.\n"
         f"Translate accurately from {from_lang} to {to_lang} using natural MMORPG terminology.\n\n"
         f"Rules:\n"
-        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., 'plsease' -> please, '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts).\n"
-        f"2. Full Translation: Translate EVERY ordinary word into the target language. Common vocabulary (e.g., everything, need, want, gold, run) must NEVER be left untranslated in the output.\n"
-        f"3. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
-        f"4. Output Format: Return ONLY the raw translated plain text without quotes, markdown bolding, explanations, commentary, or channel prefixes."
+        f"1. Context & Slang: Accurately translate gamer slang and intent (e.g., '来' -> 'LF / need', 'T' -> 'Tank', 'N'/'奶' -> 'Healer', 'D'/'输出' -> 'DPS', 'TND' -> 'Tank/Healer/DPS', 'TN' -> 'Tank/Healer', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)', '拉' -> 'summon', '开门' -> 'portal', '邮箱' -> mailbox, '有坑' -> has spot, '+' or '1' -> invite/inv, '重登' -> relog, '打信' -> turn in texts, '卡' -> 'stuck/lag').\n"
+        f"2. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
+        f"3. Mixed Chat: If text mixes multiple languages (e.g., '卡Dead', 'not ready次'), preserve standard gaming terms and translate surrounding vernacular into {to_lang}.\n"
+        f"4. Direct Translation Only: Output strictly the raw translated plain text. Mirror the input line-for-line. No conversational replies, no roleplay, no markdown bolding, no explanations, no commentary, and no added prefixes."
     )
 
     safety_settings = [
@@ -581,7 +589,7 @@ def _call_gemini(text, from_lang, to_lang, backend):
         "contents": [
             {
                 "parts": [
-                    {"text": f"{system_prompt}\n\nTranslate from {from_lang} to {to_lang}: {text}"}
+                    {"text": f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {to_lang}. Output only the translation:\n<chat>{text}</chat>"}
                 ]
             }
         ],
@@ -625,6 +633,7 @@ def _call_gemini(text, from_lang, to_lang, backend):
             # Clean up markdown bolding or quotes if any
             result = re.sub(r"^\*+(.*?)\*+$", r"\1", result)
             result = re.sub(r'^["\'](.*)["\']$', r"\1", result)
+            result = re.sub(r"</?chat>", "", result, flags=re.IGNORECASE).strip()
             return result.strip()
         except urllib.error.HTTPError as he:
             last_exc = he
