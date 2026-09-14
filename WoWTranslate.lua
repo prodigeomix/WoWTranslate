@@ -513,7 +513,7 @@ function WT_OnAddonLoaded()
         end
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.5 - " .. statusText .. " | /wt show")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.6 - " .. statusText .. " | /wt show")
 end
 
 -- ============================================================================

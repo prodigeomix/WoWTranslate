@@ -2,6 +2,20 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.6] - 2026-09-14
+
+### 🚀 LLM Prompt Hardening & SLM Optimization
+- **Chat Payload Boundary Isolation**: Encapsulated outgoing chat text in `<chat>{text}</chat>` with explicit translation directives across Ollama, OpenAI, and Gemini backends. Eliminates small language model (e.g. Qwen 2.5 3B) hallucinations where 1–2 word chat messages (such as `'对话'` or `'yes'`) were mistaken for conversational roleplay prompts.
+- **Hard Stop Sequence Protection**: Configured `stop: ["\n\n", "Player:", "NPC:", "<chat>", "</chat>"]` in Ollama request options to halt over-generation latency spikes.
+- **Bilingual Gaming Code-Switching**: Added explicit rules for mixed English and Chinese gamer vernacular (e.g. `'卡Dead'`, `'not ready次'`) and added `'卡' -> 'stuck/lag'` to the prompt dictionary.
+- **Prompt Token Leak Elimination**: Cleaned up system prompt rules to remove erroneous tokens (like `'plsease'`).
+- **Sanitization & Post-Processing**: Added regex cleanups for echoed `<chat>` tags and roleplay prefixes (`Player:`, `NPC:`).
+
+### 🧪 Audit Certification
+- All 8 forensic audit verification suites passing with zero errors.
+
+---
+
 ## [v3.6.5] - 2026-09-13
 
 ### 📢 Documentation & Setup Transparency
