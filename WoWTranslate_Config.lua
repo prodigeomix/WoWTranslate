@@ -104,8 +104,8 @@ end)
 
 -- Title
 local title = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-title:SetPoint("TOP", configFrame, "TOP", 0, -20)
-title:SetText("WoWTranslate Configuration - v3.6.7")
+title:SetPoint("TOP", configFrame, "TOP", 0, -16)
+title:SetText("WoWTranslate Configuration - v3.6.8")
 
 -- Close button
 local closeBtn = CreateFrame("Button", nil, configFrame, "UIPanelCloseButton")
@@ -284,38 +284,71 @@ end
 -- BUILD UI
 -- ============================================================================
 
-local Y_IN_HEADER    = -50
-local Y_IN_ENABLE    = -76
-local Y_IN_NAMES     = -101
-local Y_IN_LANG      = -130
+local RefreshUI
 
-local Y_SRC_LABEL    = -185
-local Y_SRC_ROW      = -208
+local Y_PRESET_LABEL = -42
+local Y_IN_HEADER    = -70
+local Y_IN_ENABLE    = -96
+local Y_IN_NAMES     = -121
+local Y_IN_LANG      = -150
 
-local Y_IN_CH_LABEL  = -242
-local Y_IN_CH_ROW1   = -264
-local Y_IN_CH_ROW2   = -289
+local Y_SRC_LABEL    = -200
+local Y_SRC_ROW      = -222
 
-local Y_OUT_HEADER   = -322
-local Y_OUT_ENABLE   = -349
-local Y_OUT_LANG     = -378
+local Y_IN_CH_LABEL  = -254
+local Y_IN_CH_ROW1   = -276
+local Y_IN_CH_ROW2   = -301
 
-local Y_CH_LABEL     = -437
-local Y_CH_ROW1      = -459
-local Y_CH_ROW2      = -484
+local Y_OUT_HEADER   = -332
+local Y_OUT_ENABLE   = -358
+local Y_OUT_LANG     = -386
 
-local Y_COLOR        = -518
-local Y_COLOR_FOLLOW = -542
+local Y_CH_LABEL     = -422
+local Y_CH_ROW1      = -444
+local Y_CH_ROW2      = -469
 
-local Y_EXP_HEADER   = -571
-local Y_EXP_ROW      = -593
+local Y_COLOR        = -502
+local Y_COLOR_FOLLOW = -526
 
-local Y_NAME_HEADER  = -625
-local Y_NAME_ROW     = -647
+local Y_EXP_HEADER   = -555
+local Y_EXP_ROW      = -577
 
-local Y_SP_HEADER    = -679
-local Y_SP_ROW1      = -701
-local Y_SP_ROW2      = -723
+local Y_NAME_HEADER  = -609
+local Y_NAME_ROW     = -631
+
+local Y_SP_HEADER    = -663
+local Y_SP_ROW1      = -685
+local Y_SP_ROW2      = -707
+
+-- Presets Section
+local presetLabel = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+presetLabel:SetPoint("TOPLEFT", configFrame, "TOPLEFT", 25, Y_PRESET_LABEL)
+presetLabel:SetText("Quick Setup / \229\191\155\233\128\159\233\135\141\231\189\174:")
+presetLabel:SetTextColor(1, 0.82, 0)
+
+local presetEnBtn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
+presetEnBtn:SetPoint("LEFT", presetLabel, "RIGHT", 10, 0)
+presetEnBtn:SetWidth(125)
+presetEnBtn:SetHeight(22)
+presetEnBtn:SetText("English Speaker")
+presetEnBtn:SetScript("OnClick", function()
+    WT_ApplyProfile("en")
+    LoadTempConfig()
+    if RefreshUI then RefreshUI() end
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Applied English Speaker preset. Click Save to keep.|r")
+end)
+
+local presetZhBtn = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
+presetZhBtn:SetPoint("LEFT", presetEnBtn, "RIGHT", 8, 0)
+presetZhBtn:SetWidth(145)
+presetZhBtn:SetHeight(22)
+presetZhBtn:SetText("\228\184\173\230\150\135\231\142\169\229\144\188 (Chinese)")
+presetZhBtn:SetScript("OnClick", function()
+    WT_ApplyProfile("zh")
+    LoadTempConfig()
+    if RefreshUI then RefreshUI() end
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Applied Chinese Speaker preset (\228\184\173\230\150\135\231\142\169\229\144\188). Click Save to keep.|r")
+end)
 
 -- Incoming Translation Section
 CreateHeader("Incoming Translation (Chat -> You)", Y_IN_HEADER)
@@ -325,13 +358,13 @@ configFrame.elements.translateSystem = CreateCheckbox("Translate system/emotes",
 configFrame.elements.inTo          = CreateLangSelector("To:", 25, Y_IN_LANG, "incomingToLang")
 
 local roleInfoText = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-roleInfoText:SetPoint("TOPRIGHT", configFrame, "TOPRIGHT", -20, Y_IN_LANG - 31)
+roleInfoText:SetPoint("TOPRIGHT", configFrame, "TOPRIGHT", -20, Y_IN_LANG - 24)
 roleInfoText:SetText("T = tank,  N = healer,  D = dps")
 roleInfoText:SetTextColor(0.2, 1, 0.2)
 roleInfoText:SetFont("Fonts\\FRIZQT__.TTF", 9, "ITALIC")
 
 local otherInfoText = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-otherInfoText:SetPoint("TOPRIGHT", configFrame, "TOPRIGHT", -20, Y_IN_LANG - 51)
+otherInfoText:SetPoint("TOPRIGHT", configFrame, "TOPRIGHT", -20, Y_IN_LANG - 40)
 otherInfoText:SetText("M, MM , MMM+ = Whisper")
 otherInfoText:SetTextColor(1, 0, 1)
 otherInfoText:SetFont("Fonts\\FRIZQT__.TTF", 9, "ITALIC")
@@ -635,7 +668,7 @@ end
 -- ============================================================================
 -- REFRESH UI FROM CONFIG
 -- ============================================================================
-local function RefreshUI()
+RefreshUI = function()
     local e = configFrame.elements
     local cfg = WoWTranslate_TempConfig
 

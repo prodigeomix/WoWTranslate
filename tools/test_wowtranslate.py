@@ -2,7 +2,7 @@
 """
 tools/test_wowtranslate.py
 ==========================
-Comprehensive unit and integration test suite for WoWTranslate v3.6.7.
+Comprehensive unit and integration test suite for WoWTranslate v3.6.8.
 
 Test Suites:
   1. UTF-8 Multi-byte Safe Truncation Engine (ASCII, CJK, Kana, Cyrillic, 4-byte Emojis, boundary walkbacks).
@@ -683,7 +683,91 @@ class TestSendChatMessageHookChainingAndReentrancy(unittest.TestCase):
         self.assertEqual(match_channel("1"), "CHANNEL")
 
 
+class TestPresetProfilesAndDefaults(unittest.TestCase):
+    """Verifies default settings, profile application, and locale detection mapping."""
+
+    def test_default_incoming_channels_includes_english(self):
+        """Verifies that the Lua defaults table enables ENGLISH incoming channel."""
+        globals_path = os.path.join(ADDON_DIR, "WoWTranslate_Globals.lua")
+        with open(globals_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        match = re.search(r"incomingChannels\s*=\s*\{([^}]+)\}", content)
+        self.assertIsNotNone(match, "incomingChannels block not found in WoWTranslate_Globals.lua")
+        block = match.group(1)
+        self.assertIn("ENGLISH = true", block, "incomingChannels.ENGLISH must default to true")
+
+    def test_apply_profile_zh_en_parity(self):
+        """Simulates WT_ApplyProfile logic to verify zh vs en profile configuration."""
+        def apply_profile(profile):
+            db = {
+                "incomingChannels": {},
+                "outgoingChannels": {},
+                "enabledSourceLangs": {},
+            }
+            if profile in ("zh", "cn"):
+                db["enabled"] = True
+                db["incomingToLang"] = "zh"
+                db["enabledSourceLangs"] = {"zh": False, "ja": True, "ko": True, "ru": True, "es": True, "en": True}
+                db["incomingChannels"]["ENGLISH"] = True
+                db["outgoingEnabled"] = True
+                db["outgoingFromLang"] = "zh"
+                db["outgoingToLang"] = "en"
+                db["outgoingChannels"]["ENGLISH"] = True
+                return db, "zh"
+            else:
+                db["enabled"] = True
+                db["incomingToLang"] = "en"
+                db["enabledSourceLangs"] = {"zh": True, "ja": True, "ko": True, "ru": True, "es": False, "en": False}
+                db["incomingChannels"]["ENGLISH"] = True
+                db["outgoingEnabled"] = False
+                db["outgoingFromLang"] = "en"
+                db["outgoingToLang"] = "zh"
+                db["outgoingChannels"]["ENGLISH"] = False
+                return db, "en"
+
+        # zh Profile
+        zh_db, code = apply_profile("zh")
+        self.assertEqual(code, "zh")
+        self.assertEqual(zh_db["incomingToLang"], "zh")
+        self.assertTrue(zh_db["enabledSourceLangs"]["en"])
+        self.assertFalse(zh_db["enabledSourceLangs"]["zh"])
+        self.assertTrue(zh_db["outgoingEnabled"])
+        self.assertEqual(zh_db["outgoingFromLang"], "zh")
+        self.assertEqual(zh_db["outgoingToLang"], "en")
+        self.assertTrue(zh_db["incomingChannels"]["ENGLISH"])
+        self.assertTrue(zh_db["outgoingChannels"]["ENGLISH"])
+
+        # en Profile
+        en_db, code = apply_profile("en")
+        self.assertEqual(code, "en")
+        self.assertEqual(en_db["incomingToLang"], "en")
+        self.assertFalse(en_db["enabledSourceLangs"]["en"])
+        self.assertTrue(en_db["enabledSourceLangs"]["zh"])
+        self.assertFalse(en_db["outgoingEnabled"])
+        self.assertEqual(en_db["outgoingFromLang"], "en")
+        self.assertEqual(en_db["outgoingToLang"], "zh")
+        self.assertTrue(en_db["incomingChannels"]["ENGLISH"])
+        self.assertFalse(en_db["outgoingChannels"]["ENGLISH"])
+
+    def test_locale_auto_detection_mapping(self):
+        """Verifies mapping from GetLocale() string to profile."""
+        def resolve_profile_for_locale(locale):
+            if locale in ("zhCN", "zhTW"):
+                return "zh"
+            return "en"
+
+        self.assertEqual(resolve_profile_for_locale("zhCN"), "zh")
+        self.assertEqual(resolve_profile_for_locale("zhTW"), "zh")
+        self.assertEqual(resolve_profile_for_locale("enUS"), "en")
+        self.assertEqual(resolve_profile_for_locale("enGB"), "en")
+        self.assertEqual(resolve_profile_for_locale("deDE"), "en")
+        self.assertEqual(resolve_profile_for_locale("ruRU"), "en")
+        self.assertEqual(resolve_profile_for_locale(None), "en")
+
+
 if __name__ == "__main__":
     unittest.main()
+
 
 

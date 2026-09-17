@@ -389,6 +389,20 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
     elseif cmd == "hide" then
         WoWTranslate_HideConfig()
 
+    elseif cmd == "preset" or cmd == "profile" then
+        local lowerArg = string.lower(arg or "")
+        if lowerArg == "zh" or lowerArg == "cn" or lowerArg == "chinese" then
+            WT_ApplyProfile("zh")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Activated Chinese Speaker preset (\228\184\173\230\150\135\231\142\169\229\144\188)|r")
+            DEFAULT_CHAT_FRAME:AddMessage("  Incoming: English -> Chinese | Outgoing: Chinese -> English (Active)")
+        elseif lowerArg == "en" or lowerArg == "english" then
+            WT_ApplyProfile("en")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Activated English Speaker preset|r")
+            DEFAULT_CHAT_FRAME:AddMessage("  Incoming: Foreign -> English | Outgoing: Off")
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("[WoWTranslate] Usage: /wt preset en | /wt preset zh")
+        end
+
     elseif cmd == "donate" or cmd == "sponsor" or cmd == "support" then
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFF80DF[WoWTranslate]|r Thank you for supporting the ongoing development of WoWTranslate!")
         DEFAULT_CHAT_FRAME:AddMessage("  GitHub Sponsors: |cFFFFFF00https://github.com/sponsors/prodigeomix|r")
@@ -400,6 +414,7 @@ SlashCmdList["WOWTRANSLATE"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("[WoWTranslate] Commands:")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt show - Open configuration panel")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt hide - Close configuration panel")
+        DEFAULT_CHAT_FRAME:AddMessage("  /wt preset [en|zh] - Quick-switch profile (English or Chinese player)")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt on|off - Enable/disable incoming translation")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt status - Show full status & connected backend")
         DEFAULT_CHAT_FRAME:AddMessage("  /wt transport [proxy|dll|auto] - Switch transport backend")
@@ -434,6 +449,20 @@ function WT_InitializeSettings()
     if type(WoWTranslateCacheOrder) ~= "table" then WoWTranslateCacheOrder = {} end
     if type(WoWTranslateCacheCounter) ~= "number" then WoWTranslateCacheCounter = 0 end
 
+    local isFreshInstall = (next(WoWTranslateDB) == nil)
+    if isFreshInstall then
+        local locale = "enUS"
+        if GetLocale then
+            locale = GetLocale() or "enUS"
+        end
+        if locale == "zhCN" or locale == "zhTW" then
+            WT_ApplyProfile("zh")
+        else
+            WT_ApplyProfile("en")
+        end
+        WoWTranslateDB.profileConfigured = true
+    end
+
     for key, value in pairs(WT_defaults) do
         if WoWTranslateDB[key] == nil then
             WoWTranslateDB[key] = value
@@ -461,7 +490,7 @@ function WT_InitializeSettings()
         end
     end
     if WoWTranslateDB.incomingChannels.HARDCORE == nil then WoWTranslateDB.incomingChannels.HARDCORE = true end
-    if WoWTranslateDB.incomingChannels.ENGLISH == nil then WoWTranslateDB.incomingChannels.ENGLISH = false end
+    if WoWTranslateDB.incomingChannels.ENGLISH == nil then WoWTranslateDB.incomingChannels.ENGLISH = true end
 
     if WoWTranslateDB.translationColorFollow == nil then WoWTranslateDB.translationColorFollow = true end
 
@@ -513,7 +542,7 @@ function WT_OnAddonLoaded()
         end
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.7 - " .. statusText .. " | /wt show")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.8 - " .. statusText .. " | /wt show")
 end
 
 -- ============================================================================

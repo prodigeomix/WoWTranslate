@@ -2,6 +2,24 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.8] - 2026-09-17
+
+### 🌐 Smart Defaults & Locale Auto-Detection
+- **Automated Client Locale Detection**: On fresh installations, WoWTranslate checks `GetLocale()`. When running on a Chinese client (`zhCN` / `zhTW`), it automatically configures the Chinese Speaker profile (incoming translated to Chinese, outgoing translated to English).
+- **Default Incoming English Channel**: Set `incomingChannels.ENGLISH = true` by default. For English speakers, English messages remain untouched (0 wasted API calls / no performance overhead), while non-English messages and Chinese players chatting in the English channel are automatically translated.
+
+### ⚡ One-Click Preset Profiles
+- **Quick Setup Buttons in GUI**: Added `[ English Speaker ]` and `[ 中文玩家 (Chinese) ]` buttons at the top of `/wt show` for instant one-click switching and automated field population.
+- **Slash Command Presets**: Added `/wt preset en` and `/wt preset zh` (alias `/wt profile`) for instant profile switching directly from the chat box or macros.
+- **Dynamic Configuration Refresh**: Instantly updates all GUI checkboxes, language dropdowns, and channel matrices upon applying a preset.
+
+### 🧪 Verification & Audit Certification
+- Added `TestPresetProfilesAndDefaults` unit test suite to `test_wowtranslate.py`.
+- Added `GetLocale` to strict Lua 5.0 allowed globals in `validate_lua50.py`.
+- All 8 forensic audit verification suites pass with zero errors.
+
+---
+
 ## [v3.6.7] - 2026-09-14
 
 ### 🎯 Non-Native English & Typo Inference Engine

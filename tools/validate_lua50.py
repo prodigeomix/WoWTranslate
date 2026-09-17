@@ -39,7 +39,7 @@ ALLOWED_GLOBALS = {
     "CreateFrame", "GetTime", "UnitExists", "UnitIsPlayer", "UnitName", "UnitPVPName",
     "UnitClass", "UnitLevel", "GetDifficultyColor", "GetGuildInfo", "UnitAffectingCombat",
     "UnitIsAFK", "GetItemInfo", "GetChannelList", "IsShiftKeyDown", "GetCursorPosition",
-    "Minimap", "tinsert", "tremove", "SendChatMessage", "CapitalizeName",
+    "Minimap", "tinsert", "tremove", "SendChatMessage", "CapitalizeName", "GetLocale",
 
     # Turtle WoW / SuperWoW / UnitXP Extensions
     "ExportFile", "ImportFile", "UnitXP",

@@ -127,7 +127,7 @@ WT_defaults = {
         BATTLEGROUND = true,
         CHANNEL = true,
         HARDCORE = true,
-        ENGLISH = false,
+        ENGLISH = true,
     },
     outgoingPrefix = "[CN]",
     outgoingPrefixEnabled = true,
@@ -154,6 +154,105 @@ WT_defaults = {
     nameplateGuildOOC = false,
     nameplateHideHealthOOC = false,
 }
+
+-- ============================================================================
+-- PRESET PROFILES (English Speaker vs Chinese Speaker)
+-- ============================================================================
+
+function WT_ApplyProfile(profile)
+    if not WoWTranslateDB then WoWTranslateDB = {} end
+    if not WoWTranslateDB.incomingChannels then WoWTranslateDB.incomingChannels = {} end
+    if not WoWTranslateDB.outgoingChannels then WoWTranslateDB.outgoingChannels = {} end
+    if not WoWTranslateDB.enabledSourceLangs then WoWTranslateDB.enabledSourceLangs = {} end
+
+    if profile == "zh" or profile == "cn" then
+        WoWTranslateDB.enabled = true
+        WoWTranslateDB.incomingToLang = "zh"
+        WoWTranslateDB.enabledSourceLangs.zh = false
+        WoWTranslateDB.enabledSourceLangs.ja = true
+        WoWTranslateDB.enabledSourceLangs.ko = true
+        WoWTranslateDB.enabledSourceLangs.ru = true
+        WoWTranslateDB.enabledSourceLangs.es = true
+        WoWTranslateDB.enabledSourceLangs.en = true
+
+        WoWTranslateDB.incomingChannels.SAY = true
+        WoWTranslateDB.incomingChannels.YELL = true
+        WoWTranslateDB.incomingChannels.WHISPER = true
+        WoWTranslateDB.incomingChannels.PARTY = true
+        WoWTranslateDB.incomingChannels.GUILD = true
+        WoWTranslateDB.incomingChannels.RAID = true
+        WoWTranslateDB.incomingChannels.BATTLEGROUND = true
+        WoWTranslateDB.incomingChannels.CHANNEL = true
+        WoWTranslateDB.incomingChannels.HARDCORE = true
+        WoWTranslateDB.incomingChannels.ENGLISH = true
+
+        WoWTranslateDB.outgoingEnabled = true
+        WoWTranslateDB.outgoingFromLang = "zh"
+        WoWTranslateDB.outgoingToLang = "en"
+        WoWTranslateDB.outgoingPrefix = "[CN]"
+        WoWTranslateDB.outgoingPrefixEnabled = true
+        WoWTranslateDB.outgoingDualLanguage = true
+
+        WoWTranslateDB.outgoingChannels.WHISPER = true
+        WoWTranslateDB.outgoingChannels.PARTY = true
+        WoWTranslateDB.outgoingChannels.GUILD = true
+        WoWTranslateDB.outgoingChannels.RAID = true
+        WoWTranslateDB.outgoingChannels.SAY = true
+        WoWTranslateDB.outgoingChannels.YELL = true
+        WoWTranslateDB.outgoingChannels.BATTLEGROUND = true
+        WoWTranslateDB.outgoingChannels.CHANNEL = true
+        WoWTranslateDB.outgoingChannels.HARDCORE = false
+        WoWTranslateDB.outgoingChannels.ENGLISH = true
+
+        if WoWTranslate_UpdateOutgoingHook then
+            WoWTranslate_UpdateOutgoingHook()
+        end
+        return "zh"
+    else
+        WoWTranslateDB.enabled = true
+        WoWTranslateDB.incomingToLang = "en"
+        WoWTranslateDB.enabledSourceLangs.zh = true
+        WoWTranslateDB.enabledSourceLangs.ja = true
+        WoWTranslateDB.enabledSourceLangs.ko = true
+        WoWTranslateDB.enabledSourceLangs.ru = true
+        WoWTranslateDB.enabledSourceLangs.es = false
+        WoWTranslateDB.enabledSourceLangs.en = false
+
+        WoWTranslateDB.incomingChannels.SAY = true
+        WoWTranslateDB.incomingChannels.YELL = true
+        WoWTranslateDB.incomingChannels.WHISPER = true
+        WoWTranslateDB.incomingChannels.PARTY = true
+        WoWTranslateDB.incomingChannels.GUILD = true
+        WoWTranslateDB.incomingChannels.RAID = true
+        WoWTranslateDB.incomingChannels.BATTLEGROUND = true
+        WoWTranslateDB.incomingChannels.CHANNEL = true
+        WoWTranslateDB.incomingChannels.HARDCORE = true
+        WoWTranslateDB.incomingChannels.ENGLISH = true
+
+        WoWTranslateDB.outgoingEnabled = false
+        WoWTranslateDB.outgoingFromLang = "en"
+        WoWTranslateDB.outgoingToLang = "zh"
+        WoWTranslateDB.outgoingPrefix = "[CN]"
+        WoWTranslateDB.outgoingPrefixEnabled = true
+        WoWTranslateDB.outgoingDualLanguage = true
+
+        WoWTranslateDB.outgoingChannels.WHISPER = true
+        WoWTranslateDB.outgoingChannels.PARTY = true
+        WoWTranslateDB.outgoingChannels.GUILD = true
+        WoWTranslateDB.outgoingChannels.RAID = true
+        WoWTranslateDB.outgoingChannels.SAY = true
+        WoWTranslateDB.outgoingChannels.YELL = true
+        WoWTranslateDB.outgoingChannels.BATTLEGROUND = true
+        WoWTranslateDB.outgoingChannels.CHANNEL = true
+        WoWTranslateDB.outgoingChannels.HARDCORE = false
+        WoWTranslateDB.outgoingChannels.ENGLISH = false
+
+        if WoWTranslate_UpdateOutgoingHook then
+            WoWTranslate_UpdateOutgoingHook()
+        end
+        return "en"
+    end
+end
 
 
 -- ============================================================================
