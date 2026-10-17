@@ -70,9 +70,11 @@ WoWTranslateGlossary["海山螺丝厂"] = "Mount Hyjal (farm)"
 -- ============================================================================
 -- DUNGEONS (50+ entries)
 -- ============================================================================
--- Scarlet Monastery (CN players use XS, not SM; SM = Shaman pinyin)
+-- Scarlet Monastery (SM = Scarlet Monastery; CN players also use XS = 血色 XuèSè)
 WoWTranslateGlossary["血色修道院"] = "Scarlet Monastery"
 WoWTranslateGlossary["血色"] = "Scarlet Monastery"
+WoWTranslateGlossary["SM"] = "Scarlet Monastery"
+WoWTranslateGlossary["sm"] = "Scarlet Monastery"
 
 -- Dire Maul
 WoWTranslateGlossary["厄运之槌"] = "Dire Maul"
@@ -226,7 +228,7 @@ WoWTranslateGlossary["ny"] = "Ragefire Chasm"
 -- Stockades (JY = 监狱 JiānYù)
 WoWTranslateGlossary["JY"] = "Stockades"
 WoWTranslateGlossary["jy"] = "Stockades"
--- Scarlet Monastery wings (XS = 血色 XuèSè)
+-- Scarlet Monastery wings (XS = 血色 XuèSè, SM = Scarlet Monastery)
 WoWTranslateGlossary["XS墓地"] = "Scarlet Monastery Graveyard"
 WoWTranslateGlossary["XS图书馆"] = "Scarlet Monastery Library"
 WoWTranslateGlossary["XS武器库"] = "Scarlet Monastery Armory"
@@ -234,6 +236,22 @@ WoWTranslateGlossary["血色武器库"] = "Scarlet Armory"
 WoWTranslateGlossary["XS教堂"] = "Scarlet Monastery Cathedral"
 WoWTranslateGlossary["XS"] = "Scarlet Monastery"
 WoWTranslateGlossary["xs"] = "Scarlet Monastery"
+WoWTranslateGlossary["SM墓地"] = "Scarlet Monastery Graveyard"
+WoWTranslateGlossary["SM图书馆"] = "Scarlet Monastery Library"
+WoWTranslateGlossary["SM武器库"] = "Scarlet Monastery Armory"
+WoWTranslateGlossary["SM教堂"] = "Scarlet Monastery Cathedral"
+WoWTranslateGlossary["sm墓地"] = "Scarlet Monastery Graveyard"
+WoWTranslateGlossary["sm图书馆"] = "Scarlet Monastery Library"
+WoWTranslateGlossary["sm武器库"] = "Scarlet Monastery Armory"
+WoWTranslateGlossary["sm教堂"] = "Scarlet Monastery Cathedral"
+WoWTranslateGlossary["SM GY"] = "Scarlet Monastery Graveyard"
+WoWTranslateGlossary["sm gy"] = "Scarlet Monastery Graveyard"
+WoWTranslateGlossary["SM Lib"] = "Scarlet Monastery Library"
+WoWTranslateGlossary["sm lib"] = "Scarlet Monastery Library"
+WoWTranslateGlossary["SM Armory"] = "Scarlet Monastery Armory"
+WoWTranslateGlossary["sm armory"] = "Scarlet Monastery Armory"
+WoWTranslateGlossary["SM Cath"] = "Scarlet Monastery Cathedral"
+WoWTranslateGlossary["sm cath"] = "Scarlet Monastery Cathedral"
 -- Gnomeregan (FB = 副本 = instance)
 WoWTranslateGlossary["侏儒FB"] = "Gnomeregan"
 WoWTranslateGlossary["矮子FB"] = "Gnomeregan"
@@ -504,11 +522,8 @@ WoWTranslateGlossary["戒律牧"] = "Disc Priest"
 WoWTranslateGlossary["神圣牧"] = "Holy Priest"
 WoWTranslateGlossary["奶牧"] = "Holy Priest"
 
--- Shaman (SM = 萨满 Sāmǎn pinyin; sm lowercase added here too)
--- NOTE: "SM" is also used for "Scarlet Monastery". This is a known static glossary limitation.
+-- Shaman (Note: "SM" / "sm" is Scarlet Monastery in WoW gaming convention; Shaman is 萨满)
 WoWTranslateGlossary["萨满"] = "Shaman"
-WoWTranslateGlossary["SM"] = "Shaman"
-WoWTranslateGlossary["sm"] = "Shaman"
 WoWTranslateGlossary["萨满祭司"] = "Shaman"
 WoWTranslateGlossary["奶萨"] = "Resto Shaman"
 WoWTranslateGlossary["元素萨"] = "Elemental Shaman"
@@ -840,7 +855,7 @@ WoWTranslateGlossary["hps"] = "HPS"
 WoWTranslateGlossary["TPS"] = "TPS"
 WoWTranslateGlossary["tps"] = "TPS"
 WoWTranslateGlossary["仇恨"] = "Threat"
-WoWTranslateGlossary["OT"] = "OT (Off-tank)"
+WoWTranslateGlossary["OT"] = "pulled aggro (OT)"
 WoWTranslateGlossary["MT"] = "MT (Main Tank)"
 WoWTranslateGlossary["主坦"] = "Main Tank"
 WoWTranslateGlossary["副坦"] = "Off-Tank"
@@ -1863,8 +1878,8 @@ WoWTranslateGlossary["可以召唤"] = "I can summon"
 WoWTranslateGlossary["拉我"] = "summon me"
 WoWTranslateGlossary["需要拉"] = "summon me"
 WoWTranslateGlossary["要拉吗"] = "need summon?"
-WoWTranslateGlossary["JF"] = "res"
-WoWTranslateGlossary["jf"] = "res"
+WoWTranslateGlossary["JF"] = "combat res"
+WoWTranslateGlossary["jf"] = "combat res"
 WoWTranslateGlossary["救我"] = "res me"
 WoWTranslateGlossary["救人"] = "res me"
 WoWTranslateGlossary["马戏团"] = "Darkmoon Faire"

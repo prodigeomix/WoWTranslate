@@ -35,7 +35,7 @@ All notable changes, fixes, and improvements to **WoWTranslate** are documented 
 - **D7 (In-Flight API Deduplication Collision)**: Indexed `pendingTexts` by `srcLang|dstLang|text` in `WoWTranslate_API.lua` and cleaned up request deduplication keys across UnitXP, File IPC, and timeouts.
 - **D8 (Vanilla 1.12.1 `_G` Compliance)**: Replaced `_G[...]` indexing in LFT entry translation with standard Vanilla `getglobal(...)`.
 - **D9 (Config UI State Desynchronization)**: Implemented transactional configuration state in `WoWTranslate_Config.lua` with snapshot saving and automatic rollback on ESC/Cancel.
-- **D10 (Glossary Collision & Semantic Resolution)**: Deduplicated 33 duplicate keys in `WoWTranslate_Glossary.lua` and 9 in `WoWTranslate_OutGlossary.lua`. Corrected `干涉` to `"Divine Intervention"` and consolidated `SM` / `sm` to `"Shaman"` and `TD` / `td` to `"Tank & DPS"`.
+- **D10 (Glossary Collision & Semantic Resolution)**: Deduplicated 33 duplicate keys in `WoWTranslate_Glossary.lua` and 9 in `WoWTranslate_OutGlossary.lua`. Corrected `干涉` to `"Divine Intervention"`, resolved `SM` / `sm` to `"Scarlet Monastery"` (resolving dungeon collision against Shaman), and consolidated `TD` / `td` to `"Tank & DPS"`.
 
 ### 📦 Packaging Hygiene & Developer Tool Exclusion
 - Added `tools/package_addon.py` enforcing an 18-file strict whitelist for release archives, guaranteeing zero developer tooling, tests, databases, or documentation leak into `WoWTranslate.zip`.

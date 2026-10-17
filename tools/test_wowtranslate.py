@@ -168,6 +168,31 @@ class TestGlossaryAndLFGPreprocessing(unittest.TestCase):
         text = re.sub(r"(\d+)Y([^a-zA-Z]|$)", r"\1s\2", text)
         self.assertEqual(text, "WTS Arcanite Bar 100g 50s")
 
+    def test_sm_scarlet_monastery_resolution(self):
+        """Verifies that SM / sm resolve to Scarlet Monastery and not Shaman in incoming & outgoing glossaries."""
+        glossary_path = os.path.join(ADDON_DIR, "WoWTranslate_Glossary.lua")
+        out_glossary_path = os.path.join(ADDON_DIR, "WoWTranslate_OutGlossary.lua")
+
+        with open(glossary_path, "r", encoding="utf-8") as f:
+            glossary_content = f.read()
+
+        with open(out_glossary_path, "r", encoding="utf-8") as f:
+            out_glossary_content = f.read()
+
+        # Incoming glossary assertions
+        self.assertIn('WoWTranslateGlossary["SM"] = "Scarlet Monastery"', glossary_content)
+        self.assertIn('WoWTranslateGlossary["sm"] = "Scarlet Monastery"', glossary_content)
+        self.assertIn('WoWTranslateGlossary["萨满"] = "Shaman"', glossary_content)
+        self.assertNotIn('WoWTranslateGlossary["SM"] = "Shaman"', glossary_content)
+        self.assertNotIn('WoWTranslateGlossary["sm"] = "Shaman"', glossary_content)
+
+        # Outgoing glossary assertions
+        self.assertIn('WoWTranslateOutGlossary["sm"] = "血色修道院"', out_glossary_content)
+        self.assertIn('WoWTranslateOutGlossary["shaman"] = "萨满"', out_glossary_content)
+        self.assertIn('WoWTranslateOutGlossary["shammy"] = "萨满"', out_glossary_content)
+        self.assertIn('WoWTranslateOutGlossary["sm lib"] = "XS图书馆"', out_glossary_content)
+        self.assertIn('WoWTranslateOutGlossary["sm cath"] = "XS教堂"', out_glossary_content)
+
 
 class TestSQLiteDatabase(unittest.TestCase):
     """Tests SQLite translation cache behavior and key hashing."""
