@@ -353,6 +353,7 @@ def _is_ollama_online(url="http://localhost:11434/api/tags"):
 
 LLM_LANG_MAP = {
     "zh": "Chinese",
+    "cn": "Chinese",
     "en": "English",
     "ru": "Russian",
     "ja": "Japanese",
@@ -363,11 +364,53 @@ LLM_LANG_MAP = {
     "pt": "Portuguese",
 }
 
+def _normalize_lang_name(lang_code):
+    """Maps language codes (e.g. 'zh', 'zhCN', 'en', 'auto') to human-readable names for LLM prompts."""
+    if not lang_code:
+        return "the source language (auto-detect it)"
+    code = str(lang_code).lower().strip()
+    if code in ("auto", ""):
+        return "the source language (auto-detect it)"
+    if code in LLM_LANG_MAP:
+        return LLM_LANG_MAP[code]
+    prefix = code[:2]
+    if prefix in LLM_LANG_MAP:
+        return LLM_LANG_MAP[prefix]
+    return code.capitalize()
+
+def _escape_chat_delimiters(text):
+    """Escapes boundary delimiter tags in user input to prevent prompt injection or premature tag closure."""
+    if not text:
+        return ""
+    # Replaces <chat>, </chat>, <聊天>, </聊天> with harmless brackets
+    return re.sub(r"<\s*(/?)\s*(?:chat|聊天)\s*>", r"[\1chat]", text, flags=re.IGNORECASE)
+
+def _clean_llm_output(result):
+    """Unified sanitization pipeline for all LLM backend responses."""
+    if not result:
+        return ""
+    # 1. Strip reasoning thoughts if model is reasoning-based (e.g. DeepSeek-R1)
+    result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
+    # 2. Strip leading translation labels / prefixes (e.g. "Translation:", "Output:", "翻译:", "聊天:")
+    result = re.sub(r"^(?:Translation|Translated text|Output|Result|翻译|译文|聊天)\s*[:：]\s*", "", result, flags=re.IGNORECASE).strip()
+    # 3. Strip hallucinated roleplay / speaker prefixes (e.g. "Player:", "Character:", "NPC:")
+    result = re.sub(r"^(?:Player|Character|NPC|System|User|Assistant):\s*", "", result, flags=re.IGNORECASE).strip()
+    # 4. Strip <chat> or <聊天> boundary tags if echoed back or translated
+    result = re.sub(r"<\s*/?\s*(?:chat|聊天)\s*>", "", result, flags=re.IGNORECASE).strip()
+    # 5. Strip markdown bolding wrapping the entire message
+    result = re.sub(r"^\*{2,}(.+)\*{2,}$", r"\1", result).strip()
+    # 6. Strip enclosing quotes if model wrapped the entire output
+    if 2 <= len(result) <= 120:
+        q = result[0]
+        if q in "\"'" and result[-1] == q:
+            result = result[1:-1].strip()
+    return result.strip()
+
 def _build_llm_system_prompt(from_lang, to_lang):
-    src_lang = LLM_LANG_MAP.get(str(from_lang).lower(), str(from_lang))
-    tgt_lang = LLM_LANG_MAP.get(str(to_lang).lower(), str(to_lang))
-    if str(src_lang).lower() == "auto":
-        src_lang = "the source language (auto-detect it)"
+    src_lang = _normalize_lang_name(from_lang)
+    tgt_lang = _normalize_lang_name(to_lang)
+    if tgt_lang == "the source language (auto-detect it)":
+        tgt_lang = "English"
 
     prompt = (
         f"You are a specialized real-time translator for World of Warcraft Classic.\n"
@@ -398,6 +441,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
     if not _is_ollama_online(tags_url):
         raise ConnectionRefusedError(f"Ollama is not responding at {base_url} (ensure 'ollama serve' or Ollama desktop app is running)")
 
+    safe_text = _escape_chat_delimiters(text)
     system_prompt, src_lang, tgt_lang = _build_llm_system_prompt(from_lang, to_lang)
 
     model = backend.get("model", "qwen2.5:3b")
@@ -414,7 +458,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{text}</chat>"},
+                {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{safe_text}</chat>"},
             ],
             "stream": False,
             "keep_alive": keep_alive,
@@ -440,7 +484,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
     # 2. Fallback: /api/generate if /api/chat returned empty or was unavailable
     if not result:
         try:
-            prompt = f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{text}</chat>\nTranslation:"
+            prompt = f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{safe_text}</chat>\nTranslation:"
             gen_payload = json.dumps({
                 "model": model,
                 "prompt": prompt,
@@ -467,25 +511,11 @@ def _call_ollama(text, from_lang, to_lang, backend):
                 err_msg += f" (chat error: {chat_exc})"
             raise ValueError(err_msg)
 
-    # Post-process: strip <think>...</think> tags if model is reasoning-based (e.g. DeepSeek-R1)
-    result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
-    # Strip leading "Translation:" prefix if model outputs it
-    result = re.sub(r"^(?:Translation|Translated text|Output|翻译|聊天)\s*[:：]\s*", "", result, flags=re.IGNORECASE).strip()
-    # Strip hallucinated roleplay prefixes like "Player: "
-    result = re.sub(r"^(?:Player|Character|NPC):\s*", "", result, flags=re.IGNORECASE).strip()
-    # Strip <chat> or <聊天> tags if echoed back or translated
-    result = re.sub(r"<\s*/?\s*(?:chat|聊天)\s*>", "", result, flags=re.IGNORECASE).strip()
-    # Strip markdown quotes or bolding (only when BOTH ends use the same wrapper
-    # and the content is short enough that it's clearly model chatter, not speech)
-    result = re.sub(r"^\*{2,}(.+)\*{2,}$", r"\1", result)  # **bold** only, not *emphasis*
-    if len(result) <= 120:
-        q = result[0]
-        if len(result) >= 2 and q in "\"'" and result[-1] == q:
-            result = result[1:-1]
-
+    # Post-process: unified sanitization pipeline
+    result = _clean_llm_output(result)
     if not result:
         raise ValueError("Ollama returned empty response")
-    return result.strip()
+    return result
 
 def _call_deepl(text, from_lang, to_lang, backend):
     api_key = backend.get("api_key", "").strip()
@@ -535,12 +565,13 @@ def _call_openai(text, from_lang, to_lang, backend):
     base_url = backend.get("base_url", "https://api.openai.com/v1").rstrip("/")
     model = backend.get("model", "gpt-4o-mini")
     timeout = backend.get("timeout", 10)
+    safe_text = _escape_chat_delimiters(text)
     system, src_lang, tgt_lang = _build_llm_system_prompt(from_lang, to_lang)
     payload = json.dumps({
         "model": model,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{text}</chat>"},
+            {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{safe_text}</chat>"},
         ],
         "max_tokens": 256,
         "temperature": 0.1,
@@ -556,9 +587,7 @@ def _call_openai(text, from_lang, to_lang, backend):
     choices = data.get("choices", [])
     if not choices:
         raise ValueError("OpenAI returned no choices")
-    res = choices[0]["message"]["content"].strip()
-    res = re.sub(r"^(?:Translation|Translated text|Output|翻译|聊天)\s*[:：]\s*", "", res, flags=re.IGNORECASE).strip()
-    res = re.sub(r"<\s*/?\s*(?:chat|聊天)\s*>", "", res, flags=re.IGNORECASE).strip()
+    res = _clean_llm_output(choices[0]["message"]["content"])
     return res
 
 def _call_google(text, from_lang, to_lang, backend):
@@ -629,6 +658,7 @@ def _call_gemini(text, from_lang, to_lang, backend):
 
     model = backend.get("model", "gemini-2.5-flash")
     timeout = backend.get("timeout", 10)
+    safe_text = _escape_chat_delimiters(text)
     system_prompt, src_lang, tgt_lang = _build_llm_system_prompt(from_lang, to_lang)
 
     safety_settings = [
@@ -642,7 +672,7 @@ def _call_gemini(text, from_lang, to_lang, backend):
         "contents": [
             {
                 "parts": [
-                    {"text": f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{text}</chat>"}
+                    {"text": f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{safe_text}</chat>"}
                 ]
             }
         ],
@@ -682,13 +712,7 @@ def _call_gemini(text, from_lang, to_lang, backend):
             parts = candidates[0].get("content", {}).get("parts", [])
             if not parts:
                 raise ValueError("Gemini returned no content parts")
-            result = parts[0].get("text", "").strip()
-            # Clean up markdown bolding or quotes if any
-            result = re.sub(r"^\*+(.*?)\*+$", r"\1", result)
-            result = re.sub(r'^["\'](.*)["\']$', r"\1", result)
-            result = re.sub(r"^(?:Translation|Translated text|Output|翻译|聊天)\s*[:：]\s*", "", result, flags=re.IGNORECASE).strip()
-            result = re.sub(r"<\s*/?\s*(?:chat|聊天)\s*>", "", result, flags=re.IGNORECASE).strip()
-            return result.strip()
+            return _clean_llm_output(parts[0].get("text", ""))
         except urllib.error.HTTPError as he:
             last_exc = he
             if he.code == 404:

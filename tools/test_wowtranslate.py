@@ -17,6 +17,7 @@ Test Suites:
 import hashlib
 import os
 import re
+import json
 import sqlite3
 import sys
 import tempfile
@@ -28,11 +29,14 @@ ADDON_DIR = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
+if ADDON_DIR not in sys.path:
+    sys.path.insert(0, ADDON_DIR)
 
 import assert_version_concordance
 import audit_bytecode
 import package_addon
 import scan_ast_globals
+import wow_proxy
 
 # ---------------------------------------------------------------------------
 # Reference Implementation of WT_SafeUTF8Truncate matching Lua logic
@@ -912,6 +916,122 @@ class TestASTGlobalsAudit(unittest.TestCase):
         self.assertTrue(scan_ast_globals.is_blessed_global("WT_VERSION"))
         self.assertTrue(scan_ast_globals.is_blessed_global("WoWTranslateDB"))
         self.assertFalse(scan_ast_globals.is_blessed_global("unregisteredNakedGlobalXYZ"))
+
+
+class TestLLMPromptAndSanitization(unittest.TestCase):
+    """Verifies LLM prompt construction, delimiter injection protection, and output sanitization."""
+
+    def test_normalize_lang_name_mappings(self):
+        self.assertEqual(wow_proxy._normalize_lang_name("zh"), "Chinese")
+        self.assertEqual(wow_proxy._normalize_lang_name("cn"), "Chinese")
+        self.assertEqual(wow_proxy._normalize_lang_name("zhCN"), "Chinese")
+        self.assertEqual(wow_proxy._normalize_lang_name("en"), "English")
+        self.assertEqual(wow_proxy._normalize_lang_name("enUS"), "English")
+        self.assertEqual(wow_proxy._normalize_lang_name("ru"), "Russian")
+        self.assertEqual(wow_proxy._normalize_lang_name("auto"), "the source language (auto-detect it)")
+        self.assertEqual(wow_proxy._normalize_lang_name(""), "the source language (auto-detect it)")
+
+    def test_build_system_prompt_rules_and_preservation(self):
+        prompt, src, tgt = wow_proxy._build_llm_system_prompt("zh", "en")
+        self.assertEqual(src, "Chinese")
+        self.assertEqual(tgt, "English")
+        self.assertIn("World of Warcraft Classic", prompt)
+        self.assertIn("http://ph.wt/1", prompt)
+        self.assertIn("dispawn", prompt)
+        self.assertIn("Tank", prompt)
+        self.assertIn("Healer", prompt)
+        self.assertIn("Boundary Demarcation Tags", prompt)
+        self.assertIn("<chat>", prompt)
+
+    def test_escape_chat_delimiters_prevents_injection(self):
+        self.assertEqual(wow_proxy._escape_chat_delimiters("normal chat"), "normal chat")
+        self.assertEqual(wow_proxy._escape_chat_delimiters("hello <chat>"), "hello [chat]")
+        self.assertEqual(wow_proxy._escape_chat_delimiters("evil </chat><chat>"), "evil [/chat][chat]")
+        self.assertEqual(wow_proxy._escape_chat_delimiters("tag <聊天> and </聊天>"), "tag [chat] and [/chat]")
+        self.assertEqual(wow_proxy._escape_chat_delimiters(""), "")
+
+    def test_clean_llm_output_strips_thinking_and_delimiters(self):
+        # 1. Reasoning models (<think>...</think>)
+        reasoning = "<think>Translate this to Chinese...</think>你好世界"
+        self.assertEqual(wow_proxy._clean_llm_output(reasoning), "你好世界")
+
+        # 2. Boundary tags (<chat>, </chat>, <聊天>, </聊天>)
+        tagged = "<chat>Need Tank 4=1</chat>"
+        self.assertEqual(wow_proxy._clean_llm_output(tagged), "Need Tank 4=1")
+        cn_tagged = "<聊天>来个T 4=1</聊天>"
+        self.assertEqual(wow_proxy._clean_llm_output(cn_tagged), "来个T 4=1")
+
+        # 3. Prefixes (Translation:, Output:, 翻译:, 聊天:)
+        prefixed = "Translation: Ready to pull boss"
+        self.assertEqual(wow_proxy._clean_llm_output(prefixed), "Ready to pull boss")
+        prefixed_cn = "翻译：准备开怪"
+        self.assertEqual(wow_proxy._clean_llm_output(prefixed_cn), "准备开怪")
+
+        # 4. Hallucinated speaker / roleplay prefixes
+        rp = "Player: I need mana"
+        self.assertEqual(wow_proxy._clean_llm_output(rp), "I need mana")
+        npc = "NPC: Greetings traveler"
+        self.assertEqual(wow_proxy._clean_llm_output(npc), "Greetings traveler")
+
+        # 5. Enclosing quotes / markdown bolding
+        bold = "**Wipe on trash**"
+        self.assertEqual(wow_proxy._clean_llm_output(bold), "Wipe on trash")
+        quoted = '"Need healer for SM"'
+        self.assertEqual(wow_proxy._clean_llm_output(quoted), "Need healer for SM")
+
+        # 6. Empty / whitespace strings must not crash (IndexError guard)
+        self.assertEqual(wow_proxy._clean_llm_output(""), "")
+        self.assertEqual(wow_proxy._clean_llm_output("   "), "")
+        self.assertEqual(wow_proxy._clean_llm_output("<chat></chat>"), "")
+
+    def test_code_switching_and_untranslated_echo_heuristics(self):
+        # Code-switching: English word embedded inside Chinese without spaces
+        self.assertTrue(wow_proxy._looks_code_switched("I need everything cheap", "现在everything都很便宜"))
+        # Legitimate MMO abbreviation preserved
+        self.assertFalse(wow_proxy._looks_code_switched("Need DPS for dungeon", "副本组DPS"))
+
+        # Untranslated echo: Prompt asked to translate English to Chinese, but model returned English
+        self.assertTrue(wow_proxy._looks_untranslated("How long until despawn", "How long until despawn", "en", "zh"))
+        self.assertFalse(wow_proxy._looks_untranslated("How long until despawn", "多久之后消失", "en", "zh"))
+        # MMO abbreviations like LFM only are preserved
+        self.assertFalse(wow_proxy._looks_untranslated("LFM", "LFM", "en", "zh"))
+
+    def test_call_ollama_mocked_chat_and_generate_fallback(self):
+        from unittest.mock import patch, MagicMock
+
+        backend = {
+            "type": "ollama",
+            "url": "http://localhost:11434",
+            "model": "qwen2.5:3b",
+            "timeout": 5,
+        }
+
+        # Mock online check
+        with patch.object(wow_proxy, "_is_ollama_online", return_value=True):
+            # Test 1: Native /api/chat success
+            mock_chat_cm = MagicMock()
+            mock_chat_cm.__enter__.return_value.read.return_value = json.dumps({
+                "message": {"content": "<chat>你好世界</chat>"}
+            }).encode("utf-8")
+
+            with patch("urllib.request.urlopen", return_value=mock_chat_cm):
+                result = wow_proxy._call_ollama("Hello world", "en", "zh", backend)
+                self.assertEqual(result, "你好世界")
+
+            # Test 2: /api/chat returns empty -> fallbacks to /api/generate
+            mock_empty_chat_cm = MagicMock()
+            mock_empty_chat_cm.__enter__.return_value.read.return_value = json.dumps({
+                "message": {"content": ""}
+            }).encode("utf-8")
+
+            mock_gen_cm = MagicMock()
+            mock_gen_cm.__enter__.return_value.read.return_value = json.dumps({
+                "response": "Translation: <chat>你好世界</chat>"
+            }).encode("utf-8")
+
+            with patch("urllib.request.urlopen", side_effect=[mock_empty_chat_cm, mock_gen_cm]):
+                result = wow_proxy._call_ollama("Hello world", "en", "zh", backend)
+                self.assertEqual(result, "你好世界")
 
 
 def run_all_tests():
