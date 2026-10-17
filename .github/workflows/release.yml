@@ -53,34 +53,8 @@ jobs:
 
       - name: Package WoWTranslate Addon ZIP
         run: |
-          mkdir -p build_stage/WoWTranslate
-          mkdir -p build_stage/WoWTranslate/IPC/requests
-          mkdir -p build_stage/WoWTranslate/IPC/results
-          touch build_stage/WoWTranslate/IPC/requests/.gitkeep
-          touch build_stage/WoWTranslate/IPC/results/.gitkeep
-
-          # Copy core addon files listed in WoWTranslate.toc
-          cp -v WoWTranslate.toc build_stage/WoWTranslate/
-          grep -v '^#' WoWTranslate.toc | grep -v '^[[:space:]]*$' | while read -r file; do
-            file=$(echo "$file" | tr -d '\r')
-            if [ -n "$file" ] && [ -f "$file" ]; then
-              cp -v "$file" build_stage/WoWTranslate/
-            fi
-          done
-          cp -v wow_proxy.py build_stage/WoWTranslate/
-          cp -v start_proxy.bat build_stage/WoWTranslate/
-          cp -v config.toml build_stage/WoWTranslate/
-          cp -v README.md build_stage/WoWTranslate/
-          cp -v CHANGELOG.md build_stage/WoWTranslate/
-          cp -v LICENSE build_stage/WoWTranslate/
-
-          # Create distribution zip files
-          cd build_stage
-          zip -r "../WoWTranslate-${{ env.VERSION }}.zip" WoWTranslate
-          zip -r "../WoWTranslate.zip" WoWTranslate
-          cd ..
-
-          # Generate SHA256 Checksums
+          python tools/package_addon.py
+          cp -v WoWTranslate.zip "WoWTranslate-${{ env.VERSION }}.zip"
           sha256sum "WoWTranslate-${{ env.VERSION }}.zip" "WoWTranslate.zip" > checksums.sha256
 
       - name: Create / Update GitHub Release & Upload Assets

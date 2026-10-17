@@ -45,3 +45,8 @@ WoWTranslate_all.lua
 *.patch
 *.zip
 Analysis on how the wowtranslate dll works.txt
+
+# Binary executables and developer toolchain binaries
+*.exe
+*.dll
+tools/bin/

@@ -70,6 +70,11 @@ def audit_all():
     print("================================================================================")
     print("LUA 5.0.3 NATIVE BYTECODE & UPVALUE BUDGET AUDITOR")
     print("================================================================================")
+    if not os.path.exists(LUAC_BIN):
+        print(f"Disassembler: {LUAC_BIN} (not present in this environment)")
+        print("[SKIP] Local luac50.exe binary not found; skipping native bytecode audit.")
+        return True
+
     print(f"Disassembler: {LUAC_BIN}")
     print(f"Auditing {len(files)} production Lua modules...")
 
