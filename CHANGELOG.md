@@ -4,6 +4,27 @@ All notable changes, fixes, and improvements to **WoWTranslate** are documented 
 
 ## [v3.6.9] - 2026-10-17
 
+### 🛡️ LLM Prompt Framing & Delimiter Injection Hardening
+- **Boundary Tag Isolation (`_escape_chat_delimiters`)**: Implemented safe delimiter escaping across Ollama, OpenAI, and Gemini callers. Chat messages containing `<chat>`, `</chat>`, `<聊天>`, or `</聊天>` are escaped to `[chat]` / `[/chat]`, preventing user input from breaking out of demarcation boundaries or triggering premature Ollama stop tokens.
+- **Language Code Normalization (`_normalize_lang_name`)**: Added canonical language name resolution supporting regional aliases (`cn`, `zhCN`, `enUS`, `ruRU`) and graceful auto-detection fallbacks in prompt generation.
+
+### 🧹 Unified Output Sanitization & Crash Guard
+- **Consolidated Sanitization Pipeline (`_clean_llm_output`)**: Unified post-processing regex filters across all LLM backends:
+  - Strips reasoning thoughts (`<think>...</think>`) from models like DeepSeek-R1.
+  - Strips boundary envelopes (`<chat>`, `</chat>`, `<聊天>`, `</聊天>`).
+  - Strips translation prefixes (`Translation:`, `Translated text:`, `Output:`, `翻译:`, `聊天:`).
+  - Strips hallucinated roleplay headers (`Player:`, `Character:`, `NPC:`, `System:`).
+  - Strips full-message markdown bolding (`**...**`) and enclosing quotation marks.
+- **Latent Crash Fix (`IndexError` on Empty Outputs)**: Fixed an unhandled `IndexError: string index out of range` in `wow_proxy.py`. Previously, `len(result) <= 120` evaluated to True on empty strings (`""`), causing `result[0]` to crash the worker thread. Hardened with a strict `if 2 <= len(result) <= 120:` bounds check.
+
+### 💬 Discord Community Bug Fixes
+- **Chat Tag Leakage Fix**: Permanently resolves the bug reported by Discord community members where `<聊天>` and `</聊天>` structural tags leaked into chat output when translating to Chinese.
+- **Startup Tag Purge**: Integrated an automatic SQLite database startup purifier that detects, cleans, or deletes cached translations contaminated with leaked XML tags in `translations.db`.
+
+### ⚙️ Local Configuration Isolation (`config.local.toml`)
+- **Protected User Configurations**: Added support for `config.local.toml`. Players using custom Ollama models (e.g. `llama3`, `mistral`), non-standard host ports, or custom cloud API keys can place their overrides in `config.local.toml`, ensuring future addon updates and zip extractions never overwrite their personal configuration.
+- **Clean Defaults**: Shipped default `config.toml` restored to standard `qwen2.5:3b` with developer and local environment paths untracked.
+
 ### 🛠️ Architectural Defect Fixes & Runtime Hardening
 - **D1 (Zombie Pipeline & CPU Leak)**: Excised the orphaned 50ms polling loop (`itemCacheFrame`) and unreferenced cache queues in `WoWTranslate_Hyperlink.lua`, preserving on-demand `WT_TriggerItemCache()` without wasteful CPU polling.
 - **D2 (Zombie Globals)**: Removed unreferenced globals `WT_currentIncomingChannel`, `WT_currentIsSystemEvent`, and `WT_messageCounter` from `WoWTranslate_Globals.lua`.
@@ -19,6 +40,7 @@ All notable changes, fixes, and improvements to **WoWTranslate** are documented 
 ### 📦 Packaging Hygiene & Developer Tool Exclusion
 - Added `tools/package_addon.py` enforcing an 18-file strict whitelist for release archives, guaranteeing zero developer tooling, tests, databases, or documentation leak into `WoWTranslate.zip`.
 - Added native Lua 5.0.3 bytecode disassembler auditor (`tools/audit_bytecode.py`) enforcing $\le 32$ upvalues per closure and FrameXML mock testing (`tools/wow_api_mock.lua`).
+- Excluded development toolchain binaries (`tools/bin/`) and local override files from Git tracking and release bundles.
 
 ---
 
