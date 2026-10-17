@@ -2,6 +2,26 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.9] - 2026-10-17
+
+### 🛠️ Architectural Defect Fixes & Runtime Hardening
+- **D1 (Zombie Pipeline & CPU Leak)**: Excised the orphaned 50ms polling loop (`itemCacheFrame`) and unreferenced cache queues in `WoWTranslate_Hyperlink.lua`, preserving on-demand `WT_TriggerItemCache()` without wasteful CPU polling.
+- **D2 (Zombie Globals)**: Removed unreferenced globals `WT_currentIncomingChannel`, `WT_currentIsSystemEvent`, and `WT_messageCounter` from `WoWTranslate_Globals.lua`.
+- **D3 (Broken Function Reference)**: Replaced non-existent `WoWTranslate_UpdateOutgoingHook` with `WoWTranslate_SetOutgoingEnabled` / hook synchronization in `WT_ApplyProfile`.
+- **D4 (Unhook Leak)**: Added `WT_UnhookLFT()` in `WoWTranslate_SetTranslateGroupFinder(false)` to cleanly detach group finder hooks when disabled.
+- **D5 (Shallow Table Aliasing)**: Implemented `WT_DeepCopy()` during settings initialization, ensuring runtime mutations to `WoWTranslateDB` sub-tables never alias or corrupt `WT_defaults`.
+- **D6 (Directional Cache Keying & Hyperlink Parity)**: Refactored cache keys to `srcLang->dstLang|text` and normalized chat frame cache lookups around placeholder-abstracted text (`textToTranslate`). Identical sentence templates containing different item links now share cache hits and reconstruct localized item links deterministically.
+- **D7 (In-Flight API Deduplication Collision)**: Indexed `pendingTexts` by `srcLang|dstLang|text` in `WoWTranslate_API.lua` and cleaned up request deduplication keys across UnitXP, File IPC, and timeouts.
+- **D8 (Vanilla 1.12.1 `_G` Compliance)**: Replaced `_G[...]` indexing in LFT entry translation with standard Vanilla `getglobal(...)`.
+- **D9 (Config UI State Desynchronization)**: Implemented transactional configuration state in `WoWTranslate_Config.lua` with snapshot saving and automatic rollback on ESC/Cancel.
+- **D10 (Glossary Collision & Semantic Resolution)**: Deduplicated 33 duplicate keys in `WoWTranslate_Glossary.lua` and 9 in `WoWTranslate_OutGlossary.lua`. Corrected `干涉` to `"Divine Intervention"` and consolidated `SM` / `sm` to `"Shaman"` and `TD` / `td` to `"Tank & DPS"`.
+
+### 📦 Packaging Hygiene & Developer Tool Exclusion
+- Added `tools/package_addon.py` enforcing an 18-file strict whitelist for release archives, guaranteeing zero developer tooling, tests, databases, or documentation leak into `WoWTranslate.zip`.
+- Added native Lua 5.0.3 bytecode disassembler auditor (`tools/audit_bytecode.py`) enforcing $\le 32$ upvalues per closure and FrameXML mock testing (`tools/wow_api_mock.lua`).
+
+---
+
 ## [v3.6.8] - 2026-09-17
 
 ### 🌐 Smart Defaults & Locale Auto-Detection

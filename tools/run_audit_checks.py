@@ -2,26 +2,43 @@
 """
 tools/run_audit_checks.py
 ========================
-Automated forensic audit verification suite for WoWTranslate v3.6.8.
-Runs:
+Automated zero-dependency forensic audit verification suite for WoWTranslate v3.6.9.
+Executes all 12 audit suites in-process:
   1. Lua 5.0 strict validation (validate_lua50.py).
   2. TOC order & static analysis lint (check_lua.py).
   3. Python compilation check for wow_proxy.py and tools.
   4. Core unit test suite (test_wowtranslate.py).
-  5. UTF-8 truncation engine unit tests (ASCII, CJK, Kana, Cyrillic, 4-byte Emoji, malformed bytes).
+  5. UTF-8 truncation algorithm test vectors (ASCII, CJK, Kana, Cyrillic, 4-byte Emoji, malformed bytes).
   6. SuperWoW buffer framing tests (280-byte chat limit, 300-byte ExportFile limit, 320-byte buffer).
   7. Static security & display sanitization sweep across all Lua files.
   8. Config.toml validation.
+  9. Version concordance assertion across TOC, Lua, Proxy, and Changelog (assert_version_concordance.py).
+  10. Lua 5.0.3 native bytecode & upvalue budget audit (<=32 upvalues) (audit_bytecode.py).
+  11. AST global namespace & scope leak audit (scan_ast_globals.py).
+  12. Release packaging hygiene & whitelist exclusion discipline (package_addon.py).
 """
 
 import os
 import py_compile
 import re
-import subprocess
 import sys
+import time
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ADDON_DIR = os.path.dirname(SCRIPT_DIR)
+
+# Add SCRIPT_DIR to sys.path for direct in-process imports
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+import assert_version_concordance
+import audit_bytecode
+import check_lua
+import package_addon
+import scan_ast_globals
+import test_wowtranslate
+import validate_lua50
+
 
 # ---------------------------------------------------------------------------
 # 1. UTF-8 Truncation Reference Implementation (matching Lua WT_SafeUTF8Truncate)
@@ -62,31 +79,35 @@ def py_safe_utf8_truncate(s: str, max_bytes: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Test Runner Functions
+# Test Runner Functions (In-Process Execution)
 # ---------------------------------------------------------------------------
 
 def test_lua_validation():
-    print("[1/8] Running Lua 5.0 strict validator...")
-    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "validate_lua50.py")], capture_output=True, text=True, check=False)
-    if res.returncode != 0:
-        print(res.stdout)
-        print(res.stderr)
-        assert False, "Lua 5.0 validation failed!"
+    print("[1/12] Running Lua 5.0 strict validator...")
+    errs = validate_lua50.validate_all(ADDON_DIR)
+    if errs:
+        for fname, flist in errs.items():
+            print(f"  [FAIL] {fname}:")
+            for e in flist:
+                print(f"    - {e}")
+        assert False, f"Lua 5.0 validation failed with {sum(len(l) for l in errs.values())} error(s)!"
     print("  All 12 Lua files strictly compliant with Lua 5.0 & client engine.")
 
 
 def test_toc_and_static_analysis():
-    print("[2/8] Running TOC order & static analysis checker...")
-    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "check_lua.py")], capture_output=True, text=True, check=False)
-    if res.returncode != 0:
-        print(res.stdout)
-        print(res.stderr)
+    print("[2/12] Running TOC order & static analysis checker...")
+    results = check_lua.check_all(ADDON_DIR)
+    if results:
+        for comp, err_list in results.items():
+            print(f"  [FAIL] {comp}:")
+            for e in err_list:
+                print(f"    - {e}")
         assert False, "TOC & static analysis check failed!"
     print("  WoWTranslate.toc load order and static code hygiene verified.")
 
 
 def test_python_compilation():
-    print("[3/8] Running Python proxy & tools compilation check...")
+    print("[3/12] Running Python proxy & tools compilation check...")
     proxy_path = os.path.join(ADDON_DIR, "wow_proxy.py")
     py_compile.compile(proxy_path, doraise=True)
     for tf in os.listdir(SCRIPT_DIR):
@@ -96,18 +117,15 @@ def test_python_compilation():
 
 
 def test_unit_test_suite():
-    print("[4/8] Running comprehensive unit test suite...")
-    res = subprocess.run([sys.executable, os.path.join(SCRIPT_DIR, "test_wowtranslate.py")], capture_output=True, text=True, check=False)
-    if res.returncode != 0:
-        print(res.stdout)
-        print(res.stderr)
-        assert False, "Unit test suite failed!"
+    print("[4/12] Running comprehensive unit test suite...")
+    success, fail_count = test_wowtranslate.run_all_tests()
+    assert success and fail_count == 0, f"Unit test suite failed with {fail_count} failure(s)!"
     print("  All unit tests passed cleanly.")
 
 
 def test_utf8_truncation_vectors():
-    print("[5/8] Running UTF-8 truncation algorithm test vectors...")
-    
+    print("[5/12] Running UTF-8 truncation algorithm test vectors...")
+
     # Test vector 1: Pure ASCII
     ascii_str = "The quick brown fox jumps over the lazy dog"
     for cap in range(1, len(ascii_str) + 5):
@@ -150,8 +168,8 @@ def test_utf8_truncation_vectors():
 
 
 def test_superwow_framing():
-    print("[6/8] Running SuperWoW buffer framing and wire truncation tests...")
-    
+    print("[6/12] Running SuperWoW buffer framing and wire truncation tests...")
+
     # 1. 280-byte chat limit test
     long_chinese = "测试" * 150  # 150 * 6 = 900 bytes
     capped_text = py_safe_utf8_truncate(long_chinese, 280)
@@ -173,15 +191,15 @@ def test_superwow_framing():
 
 
 def test_static_security_sweep():
-    print("[7/8] Running static security & display sanitization sweep...")
-    
+    print("[7/12] Running static security & display sanitization sweep...")
+
     dangerous_patterns = [
         r"\bloadstring\b",
         r"\bRunScript\b",
         r"\bos\.execute\b",
         r"\bio\.popen\b",
     ]
-    
+
     lua_files = [f for f in os.listdir(ADDON_DIR) if f.startswith("WoWTranslate") and f.endswith(".lua") and f != "WoWTranslate_all.lua"]
     for lf in lua_files:
         path = os.path.join(ADDON_DIR, lf)
@@ -195,10 +213,10 @@ def test_static_security_sweep():
 
 
 def test_config_validation():
-    print("[8/8] Validating config.toml structure...")
+    print("[8/12] Validating config.toml structure...")
     config_path = os.path.join(ADDON_DIR, "config.toml")
     assert os.path.exists(config_path), "config.toml not found!"
-    
+
     if sys.version_info >= (3, 11):
         import tomllib
     else:
@@ -218,11 +236,42 @@ def test_config_validation():
         print("  tomllib not present; skipping deep TOML parse.")
 
 
+def test_version_concordance():
+    print("[9/12] Asserting 100% version concordance across TOC, Lua, Proxy, and Changelog...")
+    tag = assert_version_concordance.main()
+    assert tag, "Version concordance failed!"
+
+
+def test_bytecode_audit():
+    print("[10/12] Running Lua 5.0.3 native bytecode & upvalue budget audit (<=32 upvalues)...")
+    ok = audit_bytecode.audit_all()
+    assert ok, "Bytecode & upvalue audit failed!"
+
+
+def test_ast_globals():
+    print("[11/12] Running AST global namespace & scope leak audit...")
+    ok = scan_ast_globals.audit_all_globals()
+    assert ok, "AST global namespace leak audit failed!"
+
+
+def test_packaging_hygiene():
+    print("[12/12] Auditing release packaging hygiene & whitelist exclusion discipline...")
+    zip_path = package_addon.build_package()
+    try:
+        ok = package_addon.audit_package(zip_path)
+        assert ok, "Release packaging hygiene audit failed!"
+    finally:
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+    print("  Release packaging hygiene certified: zero dev tools/tests/docs leak into release ZIP.")
+
+
 def main():
+    t_start = time.time()
     print("=" * 65)
-    print("  WoWTranslate v3.6.8 Forensic Audit & Verification Suite")
+    print("  WoWTranslate v3.6.9 Forensic Audit & Verification Suite")
     print("=" * 65)
-    
+
     try:
         test_lua_validation()
         test_toc_and_static_analysis()
@@ -232,11 +281,16 @@ def main():
         test_superwow_framing()
         test_static_security_sweep()
         test_config_validation()
+        test_version_concordance()
+        test_bytecode_audit()
+        test_ast_globals()
+        test_packaging_hygiene()
+        t_elapsed = time.time() - t_start
         print("\n" + "=" * 65)
-        print("  ALL 8 AUDIT TEST SUITES PASSED! Codebase certified clean.")
+        print(f"  ALL 12 AUDIT TEST SUITES PASSED in {t_elapsed:.3f}s! Codebase certified clean.")
         print("=" * 65)
         return 0
-    except (AssertionError, RuntimeError, ValueError, OSError, subprocess.SubprocessError) as e:
+    except (AssertionError, RuntimeError, ValueError, OSError) as e:
         print(f"\n[AUDIT FAILURE]: {e}")
         return 1
 

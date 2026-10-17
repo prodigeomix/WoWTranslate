@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.6.8  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.6.9  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -54,7 +54,7 @@ if sys.platform == "win32":
     except (AttributeError, io.UnsupportedOperation, OSError):
         pass
 
-VERSION = "3.6.8"
+VERSION = "3.6.9"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
@@ -171,9 +171,21 @@ def ensure_ipc_dirs(ipc_root):
 # ---------------------------------------------------------------------------
 _db_local = threading.local()
 
+def _db_close():
+    if hasattr(_db_local, "conn") and _db_local.conn is not None:
+        try:
+            _db_local.conn.close()
+        except Exception:
+            pass
+        _db_local.conn = None
+        _db_local.path = None
+
 def _db(db_path):
-    if not hasattr(_db_local, "conn") or _db_local.conn is None:
+    current_path = getattr(_db_local, "path", None)
+    if not hasattr(_db_local, "conn") or _db_local.conn is None or current_path != db_path:
+        _db_close()
         _db_local.conn = sqlite3.connect(db_path, check_same_thread=False)
+        _db_local.path = db_path
         _db_local.conn.execute("PRAGMA journal_mode=WAL")
         _db_local.conn.execute("PRAGMA busy_timeout=5000")
         _db_local.conn.execute("""
@@ -278,6 +290,47 @@ def cache_purge_code_switched(db_path):
           f"of {len(rows)} cached")
     return len(bad)
 
+def cache_purge_leaked_tags(db_path):
+    """Startup cleanup: sanitize or drop cached translations containing
+    leaked boundary or translated tags (e.g. <chat>, </chat>, <聊天>, </聊天>, 聊天：)."""
+    try:
+        conn = _db(db_path)
+        rows = conn.execute(
+            "SELECT src_hash, from_lang, to_lang, result FROM translations WHERE result LIKE '%<%' OR result LIKE '%聊天%'"
+        ).fetchall()
+    except sqlite3.Error as e:
+        print(f"[cache] purge leaked tags error: {e}")
+        return 0
+    bad_hashes = []
+    sanitized_entries = []
+    tag_pattern = re.compile(r"<\s*/?\s*(?:chat|聊天)\s*>", re.IGNORECASE)
+    prefix_pattern = re.compile(r"^(?:Translation|Translated text|Output|翻译|聊天)\s*[:：]\s*", re.IGNORECASE)
+    for h, fl, tl, result in rows:
+        cleaned = tag_pattern.sub("", result or "")
+        cleaned = prefix_pattern.sub("", cleaned).strip()
+        if cleaned != result:
+            if cleaned:
+                sanitized_entries.append((cleaned, h, fl, tl))
+            else:
+                bad_hashes.append((h, fl, tl))
+    if sanitized_entries:
+        conn.executemany(
+            "UPDATE translations SET result=? WHERE src_hash=? AND from_lang=? AND to_lang=?",
+            sanitized_entries,
+        )
+    if bad_hashes:
+        conn.executemany(
+            "DELETE FROM translations WHERE src_hash=? AND from_lang=? AND to_lang=?",
+            bad_hashes,
+        )
+    if sanitized_entries or bad_hashes:
+        conn.commit()
+    count = len(sanitized_entries) + len(bad_hashes)
+    if count > 0:
+        print(f"[cache] startup tag purge: sanitized/removed {count} leaked tag entr{'y' if count==1 else 'ies'}")
+    return count
+
+
 # ---------------------------------------------------------------------------
 _ollama_online = None
 _ollama_last_check = 0
@@ -327,7 +380,8 @@ def _build_llm_system_prompt(from_lang, to_lang):
         f"2. Conversational Polarity: Accurately translate negative replies in context (e.g., '没有 失败了' -> 'Nope, failed' / 'No, we failed', '没有 灭了' -> 'Nope, wiped').\n"
         f"3. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
         f"4. Mixed Chat: If text mixes multiple languages (e.g., '卡Dead', 'not ready次', '净化r'), preserve gaming terms and translate surrounding vernacular into {tgt_lang}.\n"
-        f"5. Mandatory Target Output: You MUST ALWAYS output the final translation in {tgt_lang}. NEVER output in {src_lang}. Never edit, autocorrect, or rewrite text in the source language — even if the input has typos or broken grammar, translate the meaning into {tgt_lang}. Output strictly the raw translated text. Mirror the input line-for-line. No conversational replies, no roleplay, no explanations, no quotes, and no added prefixes."
+        f"5. Mandatory Target Output: You MUST ALWAYS output the final translation in {tgt_lang}. NEVER output in {src_lang}. Never edit, autocorrect, or rewrite text in the source language — even if the input has typos or broken grammar, translate the meaning into {tgt_lang}. Output strictly the raw translated text. Mirror the input line-for-line. No conversational replies, no roleplay, no explanations, no quotes, and no added prefixes.\n"
+        f"6. Boundary Demarcation Tags: Input text is enclosed in <chat>...</chat> tags to mark its boundaries. NEVER output, translate, or include <chat>, </chat>, or translated boundary tags like <聊天> or </聊天> in your output. Output ONLY the pure translated message."
     )
     return prompt, src_lang, tgt_lang
 
@@ -360,14 +414,14 @@ def _call_ollama(text, from_lang, to_lang, backend):
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output only the translation:\n<chat>{text}</chat>"},
+                {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{text}</chat>"},
             ],
             "stream": False,
             "keep_alive": keep_alive,
             "options": {
                 "temperature": temperature,
                 "num_predict": num_predict,
-                "stop": ["\n\n", "Player:", "NPC:", "</chat>"],
+                "stop": ["\n\n", "Player:", "NPC:", "</chat>", "</聊天>"],
             },
         }).encode("utf-8")
 
@@ -386,7 +440,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
     # 2. Fallback: /api/generate if /api/chat returned empty or was unavailable
     if not result:
         try:
-            prompt = f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output only the translation:\n<chat>{text}</chat>\nTranslation:"
+            prompt = f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{text}</chat>\nTranslation:"
             gen_payload = json.dumps({
                 "model": model,
                 "prompt": prompt,
@@ -395,7 +449,7 @@ def _call_ollama(text, from_lang, to_lang, backend):
                 "options": {
                     "temperature": temperature,
                     "num_predict": num_predict,
-                    "stop": ["\n\n", "Player:", "NPC:", "</chat>"],
+                    "stop": ["\n\n", "Player:", "NPC:", "</chat>", "</聊天>"],
                 },
             }).encode("utf-8")
 
@@ -416,11 +470,11 @@ def _call_ollama(text, from_lang, to_lang, backend):
     # Post-process: strip <think>...</think> tags if model is reasoning-based (e.g. DeepSeek-R1)
     result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
     # Strip leading "Translation:" prefix if model outputs it
-    result = re.sub(r"^(?:Translation|Translated text|Output):\s*", "", result, flags=re.IGNORECASE).strip()
+    result = re.sub(r"^(?:Translation|Translated text|Output|翻译|聊天)\s*[:：]\s*", "", result, flags=re.IGNORECASE).strip()
     # Strip hallucinated roleplay prefixes like "Player: "
     result = re.sub(r"^(?:Player|Character|NPC):\s*", "", result, flags=re.IGNORECASE).strip()
-    # Strip <chat> tags if echoed back
-    result = re.sub(r"</?chat>", "", result, flags=re.IGNORECASE).strip()
+    # Strip <chat> or <聊天> tags if echoed back or translated
+    result = re.sub(r"<\s*/?\s*(?:chat|聊天)\s*>", "", result, flags=re.IGNORECASE).strip()
     # Strip markdown quotes or bolding (only when BOTH ends use the same wrapper
     # and the content is short enough that it's clearly model chatter, not speech)
     result = re.sub(r"^\*{2,}(.+)\*{2,}$", r"\1", result)  # **bold** only, not *emphasis*
@@ -486,7 +540,7 @@ def _call_openai(text, from_lang, to_lang, backend):
         "model": model,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output only the translation:\n<chat>{text}</chat>"},
+            {"role": "user", "content": f"Translate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{text}</chat>"},
         ],
         "max_tokens": 256,
         "temperature": 0.1,
@@ -503,7 +557,8 @@ def _call_openai(text, from_lang, to_lang, backend):
     if not choices:
         raise ValueError("OpenAI returned no choices")
     res = choices[0]["message"]["content"].strip()
-    res = re.sub(r"</?chat>", "", res, flags=re.IGNORECASE).strip()
+    res = re.sub(r"^(?:Translation|Translated text|Output|翻译|聊天)\s*[:：]\s*", "", res, flags=re.IGNORECASE).strip()
+    res = re.sub(r"<\s*/?\s*(?:chat|聊天)\s*>", "", res, flags=re.IGNORECASE).strip()
     return res
 
 def _call_google(text, from_lang, to_lang, backend):
@@ -587,7 +642,7 @@ def _call_gemini(text, from_lang, to_lang, backend):
         "contents": [
             {
                 "parts": [
-                    {"text": f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output only the translation:\n<chat>{text}</chat>"}
+                    {"text": f"{system_prompt}\n\nTranslate this World of Warcraft chat message into {tgt_lang}. Output ONLY the translated text inside the <chat> tags. Never translate or output <chat> or </chat> tags:\n<chat>{text}</chat>"}
                 ]
             }
         ],
@@ -631,7 +686,8 @@ def _call_gemini(text, from_lang, to_lang, backend):
             # Clean up markdown bolding or quotes if any
             result = re.sub(r"^\*+(.*?)\*+$", r"\1", result)
             result = re.sub(r'^["\'](.*)["\']$', r"\1", result)
-            result = re.sub(r"</?chat>", "", result, flags=re.IGNORECASE).strip()
+            result = re.sub(r"^(?:Translation|Translated text|Output|翻译|聊天)\s*[:：]\s*", "", result, flags=re.IGNORECASE).strip()
+            result = re.sub(r"<\s*/?\s*(?:chat|聊天)\s*>", "", result, flags=re.IGNORECASE).strip()
             return result.strip()
         except urllib.error.HTTPError as he:
             last_exc = he
@@ -727,6 +783,9 @@ def translate(text, from_lang, to_lang, backends):
                     result = re.sub(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]+$", "", result).strip()
                 # Sanitize wire format separator | to /
                 result = result.replace("|", "/")
+                # Strip boundary and chat tags if leaked by any LLM
+                result = re.sub(r"<\s*/?\s*(?:chat|聊天)\s*>", "", result, flags=re.IGNORECASE).strip()
+                result = re.sub(r"^(?:Translation|Translated text|Output|翻译|聊天)\s*[:：]\s*", "", result, flags=re.IGNORECASE).strip()
                 # Code-switching & untranslated echo pass (LLM backends only): if the output
                 # left ordinary source words untranslated or echoed English, prefer another backend.
                 if btype in ("ollama", "openai", "gemini", "deepl"):
@@ -1143,7 +1202,11 @@ def main():
     args = parser.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    cfg_path = args.config if os.path.isabs(args.config) else os.path.join(script_dir, args.config)
+    local_cfg = os.path.join(script_dir, "config.local.toml")
+    if args.config == "config.toml" and os.path.exists(local_cfg):
+        cfg_path = local_cfg
+    else:
+        cfg_path = args.config if os.path.isabs(args.config) else os.path.join(script_dir, args.config)
     cfg = load_config(cfg_path)
 
     wow_root = os.path.abspath(args.wow_root) if args.wow_root else detect_wow_root(__file__)
@@ -1157,8 +1220,9 @@ def main():
         ensure_ipc_dirs(target)
 
     # Startup hygiene: silently drop cached translations with code-switching
-    # artifacts so users who received bad entries get clean re-translations.
+    # artifacts or leaked tags so users get clean re-translations.
     cache_purge_code_switched(db_path)
+    cache_purge_leaked_tags(db_path)
 
     backends = cfg.get("backends", [])
     workers = cfg.get("workers", 4)

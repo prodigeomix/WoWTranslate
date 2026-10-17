@@ -59,9 +59,14 @@ jobs:
           touch build_stage/WoWTranslate/IPC/requests/.gitkeep
           touch build_stage/WoWTranslate/IPC/results/.gitkeep
 
-          # Copy core addon files
+          # Copy core addon files listed in WoWTranslate.toc
           cp -v WoWTranslate.toc build_stage/WoWTranslate/
-          cp -v WoWTranslate*.lua build_stage/WoWTranslate/
+          grep -v '^#' WoWTranslate.toc | grep -v '^[[:space:]]*$' | while read -r file; do
+            file=$(echo "$file" | tr -d '\r')
+            if [ -n "$file" ] && [ -f "$file" ]; then
+              cp -v "$file" build_stage/WoWTranslate/
+            fi
+          done
           cp -v wow_proxy.py build_stage/WoWTranslate/
           cp -v start_proxy.bat build_stage/WoWTranslate/
           cp -v config.toml build_stage/WoWTranslate/

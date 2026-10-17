@@ -12,6 +12,7 @@ WoWTranslateDebugLog = WoWTranslateDebugLog or {}
 -- LOCAL STATE
 -- ============================================================================
 
+WT_VERSION = "3.6.9"
 WT_DEBUG_MODE = false
 WT_addonLoaded = false
 WT_originalAddMessage = nil
@@ -22,8 +23,6 @@ WT_hookCallCount = 0         -- incremented every time any hook body executes
 
 WT_pendingMessages = {}
 WT_pendingKeyCounter = 0  -- monotonic counter preventing pending-key collisions
-WT_messageCounter = 0
-
 
 -- Outgoing translation state
 WT_outgoingQueue = {}
@@ -58,10 +57,6 @@ WT_TRANSLATED_PREFIXES = {
     pt = "[PT]",
 }
 WT_DEFAULT_PREFIX = "[CN]"
-
--- Incoming channel detection state
-WT_currentIncomingChannel = nil
-WT_currentIsSystemEvent = false  -- True for system/emote/NPC events
 
 WT_EVENT_TO_CHANNEL = {
     CHAT_MSG_SAY = "SAY",
@@ -155,6 +150,18 @@ WT_defaults = {
     nameplateHideHealthOOC = false,
 }
 
+-- Deep-copy helper to prevent table reference aliasing between WT_defaults and WoWTranslateDB
+function WT_DeepCopy(val)
+    if type(val) ~= "table" then
+        return val
+    end
+    local copy = {}
+    for k, v in pairs(val) do
+        copy[k] = WT_DeepCopy(v)
+    end
+    return copy
+end
+
 -- ============================================================================
 -- PRESET PROFILES (English Speaker vs Chinese Speaker)
 -- ============================================================================
@@ -164,6 +171,8 @@ function WT_ApplyProfile(profile)
     if not WoWTranslateDB.incomingChannels then WoWTranslateDB.incomingChannels = {} end
     if not WoWTranslateDB.outgoingChannels then WoWTranslateDB.outgoingChannels = {} end
     if not WoWTranslateDB.enabledSourceLangs then WoWTranslateDB.enabledSourceLangs = {} end
+
+    local appliedProfile = "en"
 
     if profile == "zh" or profile == "cn" then
         WoWTranslateDB.enabled = true
@@ -204,10 +213,7 @@ function WT_ApplyProfile(profile)
         WoWTranslateDB.outgoingChannels.HARDCORE = false
         WoWTranslateDB.outgoingChannels.ENGLISH = true
 
-        if WoWTranslate_UpdateOutgoingHook then
-            WoWTranslate_UpdateOutgoingHook()
-        end
-        return "zh"
+        appliedProfile = "zh"
     else
         WoWTranslateDB.enabled = true
         WoWTranslateDB.incomingToLang = "en"
@@ -247,11 +253,23 @@ function WT_ApplyProfile(profile)
         WoWTranslateDB.outgoingChannels.HARDCORE = false
         WoWTranslateDB.outgoingChannels.ENGLISH = false
 
-        if WoWTranslate_UpdateOutgoingHook then
-            WoWTranslate_UpdateOutgoingHook()
-        end
-        return "en"
+        appliedProfile = "en"
     end
+
+    if WoWTranslate_SetOutgoingEnabled then
+        WoWTranslate_SetOutgoingEnabled(WoWTranslateDB.outgoingEnabled)
+    else
+        if WoWTranslateDB.outgoingEnabled and WT_InstallOutgoingHook then
+            WT_InstallOutgoingHook()
+        elseif not WoWTranslateDB.outgoingEnabled and WT_RemoveOutgoingHook then
+            WT_RemoveOutgoingHook()
+        end
+        if WT_UpdateOutgoingButton then
+            WT_UpdateOutgoingButton()
+        end
+    end
+
+    return appliedProfile
 end
 
 

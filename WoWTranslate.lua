@@ -465,7 +465,7 @@ function WT_InitializeSettings()
 
     for key, value in pairs(WT_defaults) do
         if WoWTranslateDB[key] == nil then
-            WoWTranslateDB[key] = value
+            WoWTranslateDB[key] = WT_DeepCopy(value)
         end
     end
 
@@ -542,7 +542,7 @@ function WT_OnAddonLoaded()
         end
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v3.6.8 - " .. statusText .. " | /wt show")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCFFWoWTranslate|r v" .. (WT_VERSION or "3.6.8") .. " - " .. statusText .. " | /wt show")
 end
 
 -- ============================================================================

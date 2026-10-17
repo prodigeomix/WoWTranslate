@@ -21,8 +21,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ADDON_DIR = os.path.dirname(SCRIPT_DIR)
 
 
-def check_toc_order():
-    toc_path = os.path.join(ADDON_DIR, "WoWTranslate.toc")
+def check_toc_order(addon_dir: str = None):
+    if addon_dir is None:
+        addon_dir = ADDON_DIR
+    toc_path = os.path.join(addon_dir, "WoWTranslate.toc")
     if not os.path.exists(toc_path):
         return ["WoWTranslate.toc not found!"]
 
@@ -31,7 +33,7 @@ def check_toc_order():
 
     errors = []
     for lf in toc_lines:
-        file_path = os.path.join(ADDON_DIR, lf)
+        file_path = os.path.join(addon_dir, lf)
         if not os.path.exists(file_path):
             errors.append(f"TOC references missing file: {lf}")
 
@@ -56,7 +58,7 @@ def check_toc_order():
     return errors
 
 
-def check_security_and_lua50(filepath):
+def check_security_and_lua50(filepath: str):
     errors = []
     with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
         lines = f.readlines()
@@ -87,24 +89,46 @@ def check_security_and_lua50(filepath):
     return errors
 
 
+def check_all(addon_dir: str = None):
+    """Runs all static and TOC checks. Returns dict mapping file/component to error lists."""
+    if addon_dir is None:
+        addon_dir = ADDON_DIR
+
+    results = {}
+    toc_errs = check_toc_order(addon_dir)
+    if toc_errs:
+        results["TOC"] = toc_errs
+
+    lua_files = [
+        f for f in os.listdir(addon_dir)
+        if f.startswith("WoWTranslate") and f.endswith(".lua") and f != "WoWTranslate_all.lua"
+    ]
+    lua_files.sort()
+
+    for lf in lua_files:
+        path = os.path.join(addon_dir, lf)
+        errs = check_security_and_lua50(path)
+        if errs:
+            results[lf] = errs
+
+    return results
+
+
 def main():
     print("=" * 65)
     print("  WoWTranslate Static Analysis & Namespace Hygiene Checker")
     print("=" * 65)
 
-    all_errors = []
+    results = check_all(ADDON_DIR)
+    total_issues = sum(len(errs) for errs in results.values())
 
-    # 1. TOC Checks
-    toc_errs = check_toc_order()
-    if toc_errs:
+    if "TOC" in results:
         print("[FAIL] TOC Manifest Order:")
-        for err in toc_errs:
+        for err in results["TOC"]:
             print(f"  - {err}")
-        all_errors.extend(toc_errs)
     else:
         print("  [PASS] WoWTranslate.toc load order verified.")
 
-    # 2. Lua File Checks
     lua_files = [
         f for f in os.listdir(ADDON_DIR)
         if f.startswith("WoWTranslate") and f.endswith(".lua") and f != "WoWTranslate_all.lua"
@@ -112,19 +136,16 @@ def main():
     lua_files.sort()
 
     for lf in lua_files:
-        path = os.path.join(ADDON_DIR, lf)
-        errs = check_security_and_lua50(path)
-        if errs:
+        if lf in results:
             print(f"\n[FAIL] {lf}:")
-            for e in errs:
+            for e in results[lf]:
                 print(f"  - {e}")
-            all_errors.extend(errs)
         else:
             print(f"  [PASS] {lf} verified clean.")
 
     print("-" * 65)
-    if all_errors:
-        print(f"  TOTAL ISSUES DETECTED: {len(all_errors)}")
+    if total_issues > 0:
+        print(f"  TOTAL ISSUES DETECTED: {total_issues}")
         print("=" * 65)
         return 1
     else:

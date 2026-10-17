@@ -97,10 +97,10 @@ local lftHooked = false
 -- the same group and update the text widget.
 function WT_LFT_ApplyTranslation(entryId, isTitle, translated)
     for i = 1, 8 do
-        local btn = _G["LFTFrameGroupEntry"..i]
+        local btn = getglobal("LFTFrameGroupEntry" .. i)
         if btn and btn:IsShown() and btn.data and btn.data.id == entryId then
             local suffix = isTitle and "Text" or "SubText"
-            local widget = _G["LFTFrameGroupEntry"..i..suffix]
+            local widget = getglobal("LFTFrameGroupEntry" .. i .. suffix)
             if widget then widget:SetText(WT_SanitizeDisplayText and WT_SanitizeDisplayText(translated) or translated) end
         end
     end
@@ -110,9 +110,11 @@ function WT_LFT_TranslateField(entryId, rawText, isTitle)
     if not rawText or rawText == "" then return end
     local detectedLang = WT_DetectSourceLanguage(rawText)
     if not detectedLang then return end
+    local targetLang = (WoWTranslateDB and WoWTranslateDB.incomingToLang) or "en"
+    if detectedLang == targetLang then return end
 
     -- Cache hit: instant, no API call needed
-    local cached, found = WoWTranslate_CacheGet(rawText)
+    local cached, found = WoWTranslate_CacheGet(rawText, detectedLang, targetLang)
     if found then
         WT_LFT_ApplyTranslation(entryId, isTitle, cached)
         return
@@ -122,7 +124,7 @@ function WT_LFT_TranslateField(entryId, rawText, isTitle)
     if WoWTranslate_CheckGlossaryExact then
         local glossaryResult = WoWTranslate_CheckGlossaryExact(rawText)
         if glossaryResult then
-            WoWTranslate_CacheSave(rawText, glossaryResult)
+            WoWTranslate_CacheSave(rawText, glossaryResult, detectedLang, targetLang)
             WT_LFT_ApplyTranslation(entryId, isTitle, glossaryResult)
             return
         end
@@ -138,17 +140,17 @@ function WT_LFT_TranslateField(entryId, rawText, isTitle)
     if not WoWTranslate_API or not WoWTranslate_API.IsAvailable() then return end
     WoWTranslate_API.Translate(textToTranslate, function(translation, err)
         if translation and translation ~= "" then
-            WoWTranslate_CacheSave(rawText, translation)
+            WoWTranslate_CacheSave(rawText, translation, detectedLang, targetLang)
             WT_LFT_ApplyTranslation(entryId, isTitle, translation)
         end
-    end, detectedLang)
+    end, detectedLang, targetLang)
 end
 
 function WT_LFT_ScanVisibleEntries()
     if not WoWTranslateDB or not WoWTranslateDB.translateGroupFinder then return end
     if not WoWTranslateDB.enabled then return end
     for i = 1, 8 do
-        local btn = _G["LFTFrameGroupEntry"..i]
+        local btn = getglobal("LFTFrameGroupEntry" .. i)
         if btn and btn:IsShown() and btn.data then
             local entry = btn.data
             WT_LFT_TranslateField(entry.id, entry.title, true)
@@ -218,7 +220,7 @@ function WT_HookGameTooltip()
             if origSetHyperlink then return origSetHyperlink(self, link) end
         end
     end
-    if not wtTooltipFrame then wtTooltipFrame = getglobal("WoWTranslateTooltipFrame") end
+    local wtTooltipFrame = getglobal("WoWTranslateTooltipFrame")
     if not wtTooltipFrame then
         wtTooltipFrame = CreateFrame("Frame", "WoWTranslateTooltipFrame", GameTooltip)
         local function DeferUpdateGameTooltip()
@@ -462,7 +464,8 @@ function WT_HookChatFrames(force)
         WT_originalAddMessage = DEFAULT_CHAT_FRAME.AddMessage
     end
 
-    for i = 1, NUM_CHAT_WINDOWS do
+    local maxChatWindows = NUM_CHAT_WINDOWS or 7
+    for i = 1, maxChatWindows do
         local frameName = "ChatFrame" .. i
         local frame = getglobal(frameName)
 
@@ -657,8 +660,12 @@ function WT_HookChatFrames(force)
                             end
 
                             local plainText = WT_BuildTranslatableText(segments)
+                            local textToTranslate = SafeUTF8Truncate(plainText, 280)
 
-                            local cached, found = WoWTranslate_CacheGet(capturedArg1)
+                            local cached, found = WoWTranslate_CacheGet(capturedArg1, detectedLang, incomingTargetLang)
+                            if not found and textToTranslate ~= capturedArg1 then
+                                cached, found = WoWTranslate_CacheGet(textToTranslate, detectedLang, incomingTargetLang)
+                            end
                             if found then
                                 WT_DebugLog("Cache hit")
                                 local safeCached = WT_SanitizeDisplayText and WT_SanitizeDisplayText(cached) or cached
@@ -672,8 +679,6 @@ function WT_HookChatFrames(force)
                                 end)
                                 return
                             end
-
-                            local textToTranslate = plainText
 
                             if not WoWTranslate_API or not WoWTranslate_API.IsAvailable() then
                                 if not WT_dllWarnShown then
@@ -702,20 +707,16 @@ function WT_HookChatFrames(force)
                                 capturedThis.wtPendingArgs = nil
                             end
 
-                            -- Cap at 280 bytes so encoded request ('zh|en|' + text) is <= 292 bytes,
-                            -- strictly fitting within SuperWoW's 320-byte ExportFile buffer.
-                            textToTranslate = SafeUTF8Truncate(textToTranslate, 280)
-
                             local apiQueued, rejectReason = WoWTranslate_API.Translate(textToTranslate, function(translation, err)
                                 if translation and translation ~= "" then
                                     WT_DebugLog("Translation:", string.sub(translation, 1, 50))
                                     WT_translationErrWarnShown = false
                                     -- C8 fix: cache under BOTH the full message (so the
-                                    -- next occurrence hits) AND the truncated text (so
-                                    -- the same truncation elsewhere hits immediately).
-                                    WoWTranslate_CacheSave(capturedArg1, translation)
+                                    -- next occurrence hits) AND the template text (so
+                                    -- identical sentence structures with different items hit immediately).
+                                    WoWTranslate_CacheSave(capturedArg1, translation, detectedLang, incomingTargetLang)
                                     if textToTranslate ~= capturedArg1 then
-                                        WoWTranslate_CacheSave(textToTranslate, translation)
+                                        WoWTranslate_CacheSave(textToTranslate, translation, detectedLang, incomingTargetLang)
                                     end
                                     local safeTranslation = WT_SanitizeDisplayText and WT_SanitizeDisplayText(translation) or translation
                                     local reconstructed = WT_ReconstructMessage(segments, safeTranslation)

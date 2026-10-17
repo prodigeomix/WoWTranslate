@@ -18,12 +18,21 @@ import hashlib
 import os
 import re
 import sqlite3
+import sys
 import tempfile
 import time
 import unittest
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ADDON_DIR = os.path.dirname(SCRIPT_DIR)
+
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+import assert_version_concordance
+import audit_bytecode
+import package_addon
+import scan_ast_globals
 
 # ---------------------------------------------------------------------------
 # Reference Implementation of WT_SafeUTF8Truncate matching Lua logic
@@ -178,6 +187,11 @@ class TestSQLiteDatabase(unittest.TestCase):
 
     def tearDown(self):
         self.conn.close()
+        try:
+            import wow_proxy
+            wow_proxy._db_close()
+        except Exception:
+            pass
         self.temp_dir.cleanup()
 
     def test_insert_and_retrieve(self):
@@ -195,6 +209,53 @@ class TestSQLiteDatabase(unittest.TestCase):
         ).fetchone()
         self.assertIsNotNone(row)
         self.assertEqual(row[0], "Hello world")
+
+    def test_cache_purge_leaked_tags(self):
+        """Tests that cache_purge_leaked_tags strips <聊天> and <chat> tags in-place in SQLite."""
+        sys.path.insert(0, ADDON_DIR)
+        import wow_proxy
+
+        # Insert bad entries
+        h1 = hashlib.sha256("test1".encode("utf-8")).hexdigest()
+        h2 = hashlib.sha256("test2".encode("utf-8")).hexdigest()
+        h3 = hashlib.sha256("test3".encode("utf-8")).hexdigest()
+        self.conn.execute(
+            "INSERT INTO translations VALUES (?, ?, ?, ?, ?)",
+            (h1, "en", "zh", "<聊天>[Delicious Mooncake] 谢谢 </聊天>", 1700000000),
+        )
+        self.conn.execute(
+            "INSERT INTO translations VALUES (?, ?, ?, ?, ?)",
+            (h2, "en", "zh", "聊天：需要人？", 1700000000),
+        )
+        self.conn.execute(
+            "INSERT INTO translations VALUES (?, ?, ?, ?, ?)",
+            (h3, "en", "zh", "<chat></chat>", 1700000000),
+        )
+        self.conn.commit()
+
+        purged = wow_proxy.cache_purge_leaked_tags(self.db_path)
+        self.assertEqual(purged, 3)
+
+        # h1 should be cleaned in place
+        row1 = self.conn.execute(
+            "SELECT result FROM translations WHERE src_hash=?", (h1,)
+        ).fetchone()
+        self.assertIsNotNone(row1)
+        self.assertEqual(row1[0], "[Delicious Mooncake] 谢谢")
+
+        # h2 should be cleaned in place
+        row2 = self.conn.execute(
+            "SELECT result FROM translations WHERE src_hash=?", (h2,)
+        ).fetchone()
+        self.assertIsNotNone(row2)
+        self.assertEqual(row2[0], "需要人？")
+
+        # h3 was purely empty tags, should be deleted
+        row3 = self.conn.execute(
+            "SELECT result FROM translations WHERE src_hash=?", (h3,)
+        ).fetchone()
+        self.assertIsNone(row3)
+
 
 
 class TestSpanishLanguageDetection(unittest.TestCase):
@@ -349,12 +410,33 @@ class TestHyperlinkExtractionAndSanitization(unittest.TestCase):
         res = re.sub(r"\|T.*?\|t", "", res)
         res = res.replace("|n", " ")
         res = res.replace("||", "|")
-        return res
+        res = re.sub(r"<think>.*?</think>", "", res, flags=re.DOTALL)
+        res = re.sub(r"<\s*/?\s*(?:chat|聊天)\s*>", "", res, flags=re.IGNORECASE)
+        res = re.sub(r"<\s*/?\s*think\s*>", "", res, flags=re.IGNORECASE)
+        return res.strip()
 
     def test_sanitize_color_codes(self):
         colored = "|cFFFF8000[Thunderfury, Blessed Blade of the Windseeker]|r"
         clean = self.py_sanitize_display_text(colored)
         self.assertEqual(clean, "[Thunderfury, Blessed Blade of the Windseeker]")
+
+    def test_sanitize_leaked_chat_and_chinese_tags(self):
+        """Verifies that leaked boundary XML tags (<chat>, <聊天>, etc.) are stripped cleanly."""
+        leaked_ascii = "<chat>[Delicious Mooncake] Thanks</chat>"
+        clean_ascii = self.py_sanitize_display_text(leaked_ascii)
+        self.assertEqual(clean_ascii, "[Delicious Mooncake] Thanks")
+
+        leaked_chinese = "<聊天>[Delicious Mooncake] 谢谢 </聊天>"
+        clean_chinese = self.py_sanitize_display_text(leaked_chinese)
+        self.assertEqual(clean_chinese, "[Delicious Mooncake] 谢谢")
+
+        leaked_spaced = "< / 聊天 >  [Delicious Mooncake] 谢谢  < / 聊天 >"
+        clean_spaced = self.py_sanitize_display_text(leaked_spaced)
+        self.assertEqual(clean_spaced, "[Delicious Mooncake] 谢谢")
+
+        leaked_think = "<think>reasoning</think> [Delicious Mooncake] 谢谢"
+        clean_think = self.py_sanitize_display_text(leaked_think)
+        self.assertEqual(clean_think, "[Delicious Mooncake] 谢谢")
 
     def test_sanitize_hyperlinks(self):
         linked = "|cffa335ee|Hitem:19364:0:0:0|h[Ashkandi, Greatsword of the Brotherhood]|h|r"
@@ -764,6 +846,80 @@ class TestPresetProfilesAndDefaults(unittest.TestCase):
         self.assertEqual(resolve_profile_for_locale("deDE"), "en")
         self.assertEqual(resolve_profile_for_locale("ruRU"), "en")
         self.assertEqual(resolve_profile_for_locale(None), "en")
+
+
+# ---------------------------------------------------------------------------
+# Tooling Parity & Developer Infrastructure Verification Suites
+# ---------------------------------------------------------------------------
+
+class TestVersionConcordanceAudit(unittest.TestCase):
+    """Verifies that assert_version_concordance asserts exact parity across TOC, Lua, Proxy, CHANGELOG."""
+
+    def test_version_concordance_matches(self):
+        tag = assert_version_concordance.main()
+        self.assertTrue(tag.startswith("v"), f"Proposed tag must start with 'v': {tag}")
+        self.assertEqual(tag, "v3.6.9")
+
+
+class TestReleasePackagingAudit(unittest.TestCase):
+    """Verifies release packaging exclusion discipline and archive structure."""
+
+    def test_package_addon_whitelist(self):
+        whitelisted = package_addon.get_whitelisted_files()
+        self.assertIn("WoWTranslate.toc", whitelisted)
+        self.assertIn("WoWTranslate.lua", whitelisted)
+        self.assertIn("WoWTranslate_Globals.lua", whitelisted)
+        self.assertIn("wow_proxy.py", whitelisted)
+        self.assertIn("config.toml", whitelisted)
+        for f in whitelisted:
+            self.assertFalse(f.startswith("tools/"), f"Dev tool leaked into whitelist: {f}")
+            self.assertFalse(f.startswith("tests/"), f"Test leaked into whitelist: {f}")
+            self.assertFalse(f.endswith(".db"), f"Database leaked into whitelist: {f}")
+            self.assertFalse("AGENTS.md" in f or "HANDOFF.md" in f, f"Internal doc leaked: {f}")
+
+    def test_package_build_and_audit(self):
+        zip_path = package_addon.build_package()
+        try:
+            self.assertTrue(os.path.exists(zip_path))
+            ok = package_addon.audit_package(zip_path)
+            self.assertTrue(ok, "audit_package returned False for generated release artifact")
+        finally:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+
+
+class TestLuaBytecodeAudit(unittest.TestCase):
+    """Verifies native Lua 5.0 compilation and upvalue limits (<=32)."""
+
+    def test_all_production_lua_bytecode_and_upvalues(self):
+        ok = audit_bytecode.audit_all()
+        self.assertTrue(ok, "Bytecode and upvalue audit failed!")
+
+    def test_luac50_binary_exists(self):
+        self.assertTrue(os.path.exists(audit_bytecode.LUAC_BIN), f"luac50.exe missing at {audit_bytecode.LUAC_BIN}")
+
+
+class TestASTGlobalsAudit(unittest.TestCase):
+    """Verifies zero un-scoped global namespace leaks in production Lua code."""
+
+    def test_ast_globals_zero_leaks(self):
+        ok = scan_ast_globals.audit_all_globals()
+        self.assertTrue(ok, "AST global leak detector found un-scoped globals!")
+
+    def test_blessed_global_helper(self):
+        self.assertTrue(scan_ast_globals.is_blessed_global("DEFAULT_CHAT_FRAME"))
+        self.assertTrue(scan_ast_globals.is_blessed_global("WT_VERSION"))
+        self.assertTrue(scan_ast_globals.is_blessed_global("WoWTranslateDB"))
+        self.assertFalse(scan_ast_globals.is_blessed_global("unregisteredNakedGlobalXYZ"))
+
+
+def run_all_tests():
+    """Runs all test suites in-process and returns (wasSuccessful, failures_count)."""
+    suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
+    with open(os.devnull, "w") as devnull:
+        runner = unittest.TextTestRunner(stream=devnull, verbosity=0)
+        result = runner.run(suite)
+        return result.wasSuccessful(), len(result.failures) + len(result.errors)
 
 
 if __name__ == "__main__":

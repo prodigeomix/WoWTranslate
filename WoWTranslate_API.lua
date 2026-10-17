@@ -342,6 +342,9 @@ end
 
 local function FireCallbacks(req, translation, err)
     if not req then return end
+    if translation and type(WT_SanitizeDisplayText) == "function" then
+        translation = WT_SanitizeDisplayText(translation)
+    end
     local cbs = req.callbacks or (req.callback and { req.callback }) or {}
     for _, cb in ipairs(cbs) do
         local ok, cbErr = pcall(cb, translation, err)
@@ -355,7 +358,7 @@ end
 -- TRANSLATION REQUESTS
 -- ============================================================================
 
-function WoWTranslate_API.Translate(text, callback, fromLang)
+function WoWTranslate_API.Translate(text, callback, fromLang, toLang)
     if not WoWTranslate_API.IsAvailable() then
         WoWTranslate_API.CheckDLL()
         if not WoWTranslate_API.IsAvailable() then
@@ -377,10 +380,14 @@ function WoWTranslate_API.Translate(text, callback, fromLang)
         return false, "rate_limited"
     end
 
-    -- Deduplication: if same text is already in flight across multiple chat frames,
+    local srcLang = fromLang or (WoWTranslateDB and WoWTranslateDB.incomingFromLang) or "zh"
+    local dstLang = toLang or (WoWTranslateDB and WoWTranslateDB.incomingToLang) or "en"
+    local dedupKey = srcLang .. "|" .. dstLang .. "|" .. text
+
+    -- Deduplication: if same (srcLang, dstLang, text) is already in flight,
     -- attach this callback to the existing request
-    if pendingTexts[text] then
-        local existingId = pendingTexts[text]
+    if pendingTexts[dedupKey] then
+        local existingId = pendingTexts[dedupKey]
         local req = pendingRequests[existingId]
         if req then
             if callback then
@@ -394,12 +401,10 @@ function WoWTranslate_API.Translate(text, callback, fromLang)
     requestCounter = requestCounter + 1
     local reqId = "in_" .. tostring(requestCounter)
 
-    local srcLang = fromLang or (WoWTranslateDB and WoWTranslateDB.incomingFromLang) or "zh"
-    local dstLang = (WoWTranslateDB and WoWTranslateDB.incomingToLang) or "en"
-
     local reqData = {
         callbacks = callback and { callback } or {},
         text      = text,
+        dedupKey  = dedupKey,
         timestamp = GetTime(),
     }
 
@@ -421,7 +426,7 @@ function WoWTranslate_API.Translate(text, callback, fromLang)
     end
 
     pendingRequests[reqId] = reqData
-    pendingTexts[text]     = reqId
+    pendingTexts[dedupKey] = reqId
 
     OnRequestQueued()
     return true, reqId
@@ -527,7 +532,11 @@ local function PollUnitXP()
             local req = pendingRequests[reqId]
             if req then
                 pendingRequests[reqId] = nil
-                if req.text then pendingTexts[req.text] = nil end
+                if req.dedupKey then
+                    pendingTexts[req.dedupKey] = nil
+                elseif req.text then
+                    pendingTexts[req.text] = nil
+                end
                 OnRequestCompleted()
 
                 if err and err ~= "" then
@@ -566,7 +575,11 @@ local function PollFileIPC()
         ClearRequest(reqId)
 
         pendingRequests[reqId] = nil
-        if req.text then pendingTexts[req.text] = nil end
+        if req.dedupKey then
+            pendingTexts[req.dedupKey] = nil
+        elseif req.text then
+            pendingTexts[req.text] = nil
+        end
         OnRequestCompleted()
 
         local firstPipe = string.find(content, "|", 1, true)
@@ -604,7 +617,11 @@ local function ProcessTimeouts()
         local req = item.req
         ClearRequest(reqId)
         pendingRequests[reqId] = nil
-        if req.text then pendingTexts[req.text] = nil end
+        if req.dedupKey then
+            pendingTexts[req.dedupKey] = nil
+        elseif req.text then
+            pendingTexts[req.text] = nil
+        end
         OnRequestCompleted()
 
         consecutiveErrors = consecutiveErrors + 1

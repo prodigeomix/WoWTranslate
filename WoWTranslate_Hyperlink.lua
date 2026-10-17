@@ -7,10 +7,6 @@
 -- Parse hyperlinks and replace Chinese display names with English equivalents
 -- using the client's GetItemInfo() API
 
--- Queue for messages waiting on item cache
-WT_itemCacheQueue = {}
-WT_itemCacheCounter = 0
-
 -- Hidden tooltip for forcing item cache population
 WT_itemCacheTooltip = CreateFrame("GameTooltip", "WoWTranslateItemCacheTooltip", nil, "GameTooltipTemplate")
 WT_itemCacheTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
@@ -21,56 +17,6 @@ function WT_TriggerItemCache(itemId)
     local itemString = "item:" .. itemId .. ":0:0:0"
     WT_itemCacheTooltip:SetHyperlink(itemString)
     WT_DebugLog("Triggered cache for item:", itemId)
-end
-
--- Extract all item IDs from a text string
-function WT_ExtractItemIds(text)
-    local itemIds = {}
-    local pos = 1
-
-    while pos <= string.len(text) do
-        -- Look for item links: |Hitem:ITEMID:
-        local linkStart = string.find(text, "|Hitem:", pos, true)
-        if not linkStart then
-            break
-        end
-
-        -- Find the item ID (numbers after "item:")
-        local idStart = linkStart + 7  -- length of "|Hitem:"
-        local idEnd = string.find(text, ":", idStart, true)
-        if idEnd then
-            local itemIdStr = string.sub(text, idStart, idEnd - 1)
-            local itemId = tonumber(itemIdStr)
-            WT_DebugLog("Extracted item ID:", itemIdStr, "->", itemId or "INVALID")
-            if itemId then
-                table.insert(itemIds, itemId)
-            end
-        end
-
-        pos = linkStart + 1
-    end
-
-    WT_DebugLog("Total item IDs extracted:", table.getn(itemIds))
-    return itemIds
-end
-
--- Check if all item IDs are cached, trigger cache for uncached ones
--- Returns: allCached (boolean), uncachedIds (table)
-function WT_CheckItemCache(itemIds, triggerCache)
-    local uncachedIds = {}
-
-    for _, itemId in ipairs(itemIds) do
-        local name, link = GetItemInfo(itemId)
-        if not name then
-            table.insert(uncachedIds, itemId)
-            -- Use SetHyperlink to force server to send item data
-            if triggerCache then
-                WT_TriggerItemCache(itemId)
-            end
-        end
-    end
-
-    return table.getn(uncachedIds) == 0, uncachedIds
 end
 
 -- Parse a hyperlink to extract its components
@@ -394,6 +340,14 @@ function WT_SanitizeDisplayText(text)
     result = string.gsub(result, "|T.-|t", "")              -- texture escapes
     result = string.gsub(result, "|n", " ")                 -- newline escape
     result = string.gsub(result, "||", "|")                 -- unescape literal pipes
+    -- Strip residual delimiter/boundary tags from LLM outputs (<chat>, </chat>, <聊天>, </聊天>)
+    result = string.gsub(result, "<[tT][hH][iI][nN][kK]>.-</[tT][hH][iI][nN][kK]>", "")
+    result = string.gsub(result, "<%s*/?%s*[cC][hH][aA][tT]%s*>", "")
+    result = string.gsub(result, "<%s*/?%s*\232\129\138\229\164\169%s*>", "")
+    result = string.gsub(result, "<%s*/?%s*\193\196\204\236%s*>", "")
+    result = string.gsub(result, "<%s*/?%s*[tT][hH][iI][nN][kK]%s*>", "")
+    result = string.gsub(result, "^%s+", "")
+    result = string.gsub(result, "%s+$", "")
     return result
 end
 
@@ -492,148 +446,3 @@ function WT_ReconstructMessage(segments, translatedText)
     return workText
 end
 
-
--- ============================================================================
--- ITEM CACHE POLLING
--- ============================================================================
-
--- Process messages waiting for item cache data
-
-function WT_ProcessItemCacheMessage(queued)
-    local text = queued.text
-    local detectedLang = WT_DetectSourceLanguage(text) or "zh"
-
-    -- Split header from body (same approach as the main hook)
-    local headerText, msgBody = WT_SplitHeaderAndMessage(text)
-
-    -- Segment only the message body
-    local segments = WT_SplitIntoSegments(msgBody)
-
-    -- Apply incoming preprocessing and glossary to segments individually
-    WT_ProcessSegmentsIncoming(segments, detectedLang)
-
-    WT_DebugLog("Processing cached item message, segments:", table.getn(segments))
-
-    if not WT_HasTranslatableContent(segments) then
-        -- Body has no translatable content; show with localized hyperlinks
-        local result = headerText
-        for _, seg in ipairs(segments) do
-            result = result .. seg.content
-        end
-        queued.WT_originalAddMessage(queued.frame, result, queued.r, queued.g, queued.b, queued.id, queued.holdTime)
-        return
-    end
-
-    local textToTranslate = WT_BuildTranslatableText(segments)
-
-    local cached, found = WoWTranslate_CacheGet(msgBody)
-    if found then
-        WT_DebugLog("Cache hit for item message")
-        local safeCached = WT_SanitizeDisplayText and WT_SanitizeDisplayText(cached) or cached
-        local finalText = headerText .. WT_ReconstructMessage(segments, safeCached)
-        queued.WT_originalAddMessage(queued.frame, finalText, queued.r, queued.g, queued.b, queued.id, queued.holdTime)
-        return
-    end
-
-    if WoWTranslate_API and WoWTranslate_API.IsAvailable() then
-        WT_DebugLog("Requesting translation for item message")
-        WT_messageCounter = WT_messageCounter + 1
-        local msgId = tostring(WT_messageCounter)
-        WT_pendingMessages[msgId] = {
-            frame = queued.frame,
-            WT_originalAddMessage = queued.WT_originalAddMessage,
-            originalText = text,
-            headerText = headerText,
-            msgBody = msgBody,
-            segments = segments,
-            r = queued.r, g = queued.g, b = queued.b,
-            id = queued.id, holdTime = queued.holdTime,
-            timestamp = GetTime()
-        }
-        WoWTranslate_API.Translate(textToTranslate, function(translation, err)
-            local pending = WT_pendingMessages[msgId]
-            if pending then
-                WT_pendingMessages[msgId] = nil
-                if translation and translation ~= "" then
-                    WT_DebugLog("API returned for item msg:", string.sub(translation, 1, 50))
-                    local safeTranslation = WT_SanitizeDisplayText and WT_SanitizeDisplayText(translation) or translation
-                    local finalText = pending.headerText .. WT_ReconstructMessage(pending.segments, safeTranslation)
-                    WoWTranslate_CacheSave(pending.msgBody, translation)
-                    pcall(pending.WT_originalAddMessage, pending.frame, finalText, pending.r, pending.g, pending.b, pending.id, pending.holdTime)
-                else
-                    WT_DebugLog("API error for item msg:", tostring(err))
-                    pcall(pending.WT_originalAddMessage, pending.frame, pending.originalText, pending.r, pending.g, pending.b, pending.id, pending.holdTime)
-                end
-            end
-        end, detectedLang)
-    else
-        local result = headerText
-        for _, seg in ipairs(segments) do result = result .. seg.content end
-        queued.WT_originalAddMessage(queued.frame, result, queued.r, queued.g, queued.b, queued.id, queued.holdTime)
-    end
-end
-
-local itemCacheFrame = CreateFrame("Frame")
-local itemCacheElapsed = 0
-local ITEM_CACHE_POLL_INTERVAL = 0.05  -- Poll every 50ms
-local ITEM_CACHE_MAX_WAIT = 3.0        -- Max wait 3 seconds
-local ITEM_CACHE_RETRY_INTERVAL = 0.5  -- Retry triggering cache every 500ms
-
-itemCacheFrame:SetScript("OnUpdate", function()
-    itemCacheElapsed = itemCacheElapsed + arg1
-    if itemCacheElapsed < ITEM_CACHE_POLL_INTERVAL then
-        return
-    end
-    itemCacheElapsed = 0
-
-    -- H2 fix: pcall the body so a throw inside WT_ProcessItemCacheMessage
-    -- (or WT_CheckItemCache) doesn't kill this OnUpdate permanently.  An
-    -- unhandled throw would leave the entry in the queue forever and the
-    -- message would never be shown to the user.
-    local queuedIds = {}
-    for cacheId, _ in pairs(WT_itemCacheQueue) do
-        table.insert(queuedIds, cacheId)
-    end
-
-    for _, cacheId in ipairs(queuedIds) do
-        local queued = WT_itemCacheQueue[cacheId]
-        if queued then
-            local ok, err = pcall(function()
-                local allCached = WT_CheckItemCache(queued.itemIds, false)  -- Just check, don't trigger
-                local elapsed = GetTime() - queued.timestamp
-
-                if allCached then
-                    WT_DebugLog("Items cached, processing message:", cacheId)
-                    WT_itemCacheQueue[cacheId] = nil
-                    WT_ProcessItemCacheMessage(queued)
-                elseif elapsed > ITEM_CACHE_MAX_WAIT then
-                    -- Timeout - process anyway with whatever we have
-                    local _, stillUncached = WT_CheckItemCache(queued.itemIds, false)
-                    WT_DebugLog("Item cache timeout after", elapsed, "sec, uncached:", table.getn(stillUncached))
-                    for _, uid in ipairs(stillUncached) do
-                        WT_DebugLog("  Still uncached item ID:", uid)
-                    end
-                    WT_itemCacheQueue[cacheId] = nil
-                    WT_ProcessItemCacheMessage(queued)
-                else
-                    -- Retry triggering cache periodically for stubborn items
-                    if not queued.lastRetry or (GetTime() - queued.lastRetry) > ITEM_CACHE_RETRY_INTERVAL then
-                        queued.lastRetry = GetTime()
-                        queued.retries = (queued.retries or 0) + 1
-                        if queued.retries <= 5 then  -- Max 5 retries
-                            local _, stillUncached = WT_CheckItemCache(queued.itemIds, true)  -- Trigger cache again
-                            if table.getn(stillUncached) > 0 then
-                                WT_DebugLog("Retry", queued.retries, "- triggering cache for", table.getn(stillUncached), "items")
-                            end
-                        end
-                    end
-                end
-            end)
-            if not ok then
-                WT_DebugLog("itemCacheFrame OnUpdate error for", cacheId, ":", tostring(err))
-                -- Drop the broken entry so we don't loop on it forever.
-                WT_itemCacheQueue[cacheId] = nil
-            end
-        end
-    end
-end)

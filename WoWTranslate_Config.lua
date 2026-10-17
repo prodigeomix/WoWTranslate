@@ -36,38 +36,26 @@ local function GetLanguageName(code)
 end
 
 -- ============================================================================
--- TEMP CONFIG
+-- TEMP CONFIG & TRANSACTIONAL SNAPSHOT
 -- ============================================================================
 WoWTranslate_TempConfig = {}
+local WoWTranslate_SavedSnapshot = nil
 
 local function LoadTempConfig()
     WoWTranslate_TempConfig = {}
     if not WoWTranslateDB then return end
-    for k, v in pairs(WoWTranslateDB) do
-        if type(v) == "table" then
-            WoWTranslate_TempConfig[k] = {}
-            for k2, v2 in pairs(v) do
-                WoWTranslate_TempConfig[k][k2] = v2
-            end
-        else
-            WoWTranslate_TempConfig[k] = v
-        end
+    WoWTranslate_TempConfig = WT_DeepCopy(WoWTranslateDB)
+    WoWTranslate_SavedSnapshot = WT_DeepCopy(WoWTranslateDB)
+    if configFrame then
+        configFrame.commitSaved = false
     end
 end
 
 local function SaveTempConfig()
     if not WoWTranslate_TempConfig then return end
-    for k, v in pairs(WoWTranslate_TempConfig) do
-        if type(v) == "table" then
-            if not WoWTranslateDB[k] then
-                WoWTranslateDB[k] = {}
-            end
-            for k2, v2 in pairs(v) do
-                WoWTranslateDB[k][k2] = v2
-            end
-        else
-            WoWTranslateDB[k] = v
-        end
+    WoWTranslateDB = WT_DeepCopy(WoWTranslate_TempConfig)
+    if WT_SyncRuntimeStateFromDB then
+        WT_SyncRuntimeStateFromDB()
     end
 end
 
@@ -102,10 +90,20 @@ configFrame:SetScript("OnMouseUp", function()
     this:StopMovingOrSizing()
 end)
 
+configFrame:SetScript("OnHide", function()
+    if not configFrame.commitSaved and WoWTranslate_SavedSnapshot then
+        WoWTranslateDB = WT_DeepCopy(WoWTranslate_SavedSnapshot)
+        if WT_SyncRuntimeStateFromDB then
+            WT_SyncRuntimeStateFromDB()
+        end
+    end
+    WoWTranslate_SavedSnapshot = nil
+end)
+
 -- Title
 local title = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOP", configFrame, "TOP", 0, -16)
-title:SetText("WoWTranslate Configuration - v3.6.8")
+title:SetText("WoWTranslate Configuration - v" .. (WT_VERSION or "3.6.8"))
 
 -- Close button
 local closeBtn = CreateFrame("Button", nil, configFrame, "UIPanelCloseButton")
@@ -593,6 +591,7 @@ saveBtn:SetWidth(80)
 saveBtn:SetHeight(26)
 saveBtn:SetText("Save")
 saveBtn:SetScript("OnClick", function()
+    configFrame.commitSaved = true
     SaveTempConfig()
     DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[WoWTranslate] Settings saved!|r")
     configFrame:Hide()
@@ -812,7 +811,20 @@ function WoWTranslate_SetTranslateGroupFinder(enabled)
         if LFTFrame and LFTFrame:IsShown() then
             WT_LFT_ScanVisibleEntries()
         end
+    else
+        if WT_UnhookLFT then
+            WT_UnhookLFT()
+        end
     end
+end
+
+function WT_SyncRuntimeStateFromDB()
+    if not WoWTranslateDB then return end
+    WoWTranslate_SetOutgoingEnabled(WoWTranslateDB.outgoingEnabled and true or false)
+    WoWTranslate_SetOutgoingButtonVisible(WoWTranslateDB.showOutgoingButton ~= false)
+    WoWTranslate_SetTranslateNameplates(WoWTranslateDB.translateNameplates and true or false)
+    WoWTranslate_SetTranslateGroupFinder(WoWTranslateDB.translateGroupFinder and true or false)
+    if WT_UpdateTagStyleBtnText then WT_UpdateTagStyleBtnText() end
 end
 
 -- ============================================================================

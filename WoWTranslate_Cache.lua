@@ -24,37 +24,45 @@ WoWTranslateCacheCounter = WoWTranslateCacheCounter or 0
 local cacheHits = 0
 local cacheMisses = 0
 
--- Build a cache key that includes the language direction so switching
--- incoming/outgoing target languages never serves stale wrong-direction hits.
-local function CacheKey(text)
+-- Build a deterministic directional cache key: "<srcLang>-><dstLang>|<text>"
+local function CacheKey(text, srcLang, dstLang)
     local db = WoWTranslateDB or {}
-    -- The addon translates in two directions: incoming (X->incomingToLang) and
-    -- outgoing (outgoingFromLang->Y). Key by both effective targets so each
-    -- direction keeps its own entries and a language switch never serves
-    -- wrong-direction stale hits.
-    local to = tostring(tostring(db.incomingToLang or "?") .. "/" .. tostring(db.outgoingToLang or "?"))
-    return to .. "|" .. text
+    local src = (srcLang and srcLang ~= "") and tostring(srcLang) or "auto"
+    local dst = (dstLang and dstLang ~= "") and tostring(dstLang) or tostring(db.incomingToLang or "en")
+    return src .. "->" .. dst .. "|" .. tostring(text)
 end
 
 -- Check if a translation exists in cache.
 -- Also bumps the entry's timestamp so frequently-used entries survive eviction.
-function WoWTranslate_CacheGet(text)
-    local key = CacheKey(text)
-    if WoWTranslateCache[key] then
+function WoWTranslate_CacheGet(text, srcLang, dstLang)
+    if not text or text == "" then
+        return nil, false
+    end
+    local key = CacheKey(text, srcLang, dstLang)
+    local val = WoWTranslateCache[key]
+    if val == nil and srcLang and srcLang ~= "auto" then
+        -- Fallback check if stored under "auto" source language for the same target language
+        local autoKey = CacheKey(text, "auto", dstLang)
+        if WoWTranslateCache[autoKey] ~= nil then
+            key = autoKey
+            val = WoWTranslateCache[autoKey]
+        end
+    end
+    if val ~= nil then
         cacheHits = cacheHits + 1
         -- Refresh LRU position so hot entries survive eviction.
         WoWTranslateCacheCounter = WoWTranslateCacheCounter + 1
         WoWTranslateCacheOrder[key] = WoWTranslateCacheCounter
-        return WoWTranslateCache[key], true
+        return val, true
     end
     cacheMisses = cacheMisses + 1
     return nil, false
 end
 
 -- Save a translation to cache.  Triggers LRU eviction if over the cap.
-function WoWTranslate_CacheSave(text, translation)
+function WoWTranslate_CacheSave(text, translation, srcLang, dstLang)
     if text and translation and text ~= "" and translation ~= "" then
-        local key = CacheKey(text)
+        local key = CacheKey(text, srcLang, dstLang)
         local isNew = (WoWTranslateCache[key] == nil)
         WoWTranslateCache[key] = translation
         WoWTranslateCacheCounter = WoWTranslateCacheCounter + 1

@@ -43,3 +43,5 @@ ehthumbs.db
 # Temporary bundles & patch files
 WoWTranslate_all.lua
 *.patch
+*.zip
+Analysis on how the wowtranslate dll works.txt
