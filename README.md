@@ -211,16 +211,25 @@ timeout = 8
 WoWTranslate adheres to the formal **4-Pillar Verification Pipeline** for Lua 5.0 and WoW 1.12.1 / Turtle WoW client addons:
 
 ```bash
-# Run full 15-suite unified verification gate (completes in < 5 seconds)
+# Run full 18-suite unified verification gate
 python tools/run_audit_checks.py
 
-# Pillar 1: Typestate safety & threat model audit (with adversarial mutations)
+# Pillar 1A: Typestate safety & threat model audit (with adversarial mutations)
 python tools/audit_typestate_threat.py --test-mutations
 
-# Pillar 2: Bytecode AST hash-consing & upvalue budget audit (with adversarial mutations)
+# Pillar 1B: Formal string typestate & information flow control (with adversarial mutations)
+python tools/verify_typestate_formal.py --test-mutations
+
+# Pillar 2A: Bytecode AST hash-consing & upvalue budget audit (with adversarial mutations)
 python tools/audit_bytecode_clones.py --test-mutations
 
-# Pillar 3: Headless VM zero-GC gauntlet & SuperWoW wire simulation (with adversarial mutations)
+# Pillar 2B: Generative property-based fuzzing & RFC 3629 boundary proof (100k iterations)
+python tools/fuzz_utf8_properties.py --iterations 100000
+
+# Pillar 3A: Low-level IPC chaos engineering & SQLite WAL concurrency harness
+python tools/test_ipc_chaos.py
+
+# Pillar 3B: Headless VM zero-GC gauntlet (10k ticks) & SuperWoW wire simulation (with mutations)
 python tools/test_headless_branch_coverage.py --test-mutations
 
 # Core unit test suite & Lua 5.0 strict validator

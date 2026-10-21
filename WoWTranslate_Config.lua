@@ -123,10 +123,10 @@ configFrame.elements = {}
 -- ============================================================================
 -- HELPER: Create Section Header
 -- ============================================================================
-local function CreateHeader(text, yPos)
+local function CreateHeader(titleText, yPos)
     local header = configFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", configFrame, "TOPLEFT", 25, yPos)
-    header:SetText(text)
+    header:SetText(titleText)
     header:SetTextColor(0, 1, 1)
     return header
 end

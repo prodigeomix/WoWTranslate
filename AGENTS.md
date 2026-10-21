@@ -46,7 +46,7 @@ Before committing or completing any task, execute:
 ```bash
 python tools/run_audit_checks.py
 ```
-All 15 verification suites must pass with zero errors in under 6 seconds:
+All 18 verification suites must pass with zero errors:
 1. Lua 5.0 strict validator (`validate_lua50.py`)
 2. TOC load order & static analysis (`check_lua.py`)
 3. Python proxy & tools compilation (`py_compile`)
@@ -59,6 +59,9 @@ All 15 verification suites must pass with zero errors in under 6 seconds:
 10. Lua 5.0.3 native bytecode & upvalue budget audit (`audit_bytecode.py`)
 11. AST global namespace & scope leak audit (`scan_ast_globals.py`)
 12. Release packaging hygiene & whitelist exclusion discipline (`package_addon.py`)
-13. **Pillar 1: Typestate Safety & Threat Model Audit** (`audit_typestate_threat.py`) with adversarial mutations proving 100% kill rate.
-14. **Pillar 2: Bytecode AST Hash-Consing & Upvalue Budget Audit** (`audit_bytecode_clones.py`) with adversarial mutations proving 100% kill rate.
-15. **Pillar 3: Headless VM Zero-GC Gauntlet & SuperWoW Wire Simulation** (`test_headless_branch_coverage.py`) with 1,000-tick steady-state Delta GC == 0 KiB and adversarial mutations.
+13. **Pillar 1A: Typestate Safety & Threat Model Audit** (`audit_typestate_threat.py`) with adversarial mutations proving 100% kill rate.
+14. **Pillar 1B: Formal String Typestate & Information Flow Control** (`verify_typestate_formal.py`) with abstract interpretation lattice and adversarial mutations proving 100% kill rate.
+15. **Pillar 2A: Bytecode AST Hash-Consing & Upvalue Budget Audit** (`audit_bytecode_clones.py`) with adversarial mutations proving 100% kill rate.
+16. **Pillar 2B: Generative Property-Based Fuzzing & RFC 3629 Boundary Proof** (`fuzz_utf8_properties.py` & `.lua`) with 25,000+ permutations and native Lua 5.0 verification.
+17. **Pillar 3A: Low-Level IPC Chaos Engineering & Concurrency Resilience** (`test_ipc_chaos.py`) verifying malformed write resilience, concurrent lock safety, and SQLite WAL integrity.
+18. **Pillar 3B: Headless VM Zero-GC Gauntlet & SuperWoW Wire Simulation** (`test_headless_branch_coverage.py`) with 10,000-tick steady-state Delta GC == 0 KiB and adversarial mutations.

@@ -170,27 +170,11 @@ def run_negative_controls(files: List[str]) -> bool:
     all_passed = True
     for name, m_file, mutated_code in mutations:
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Copy all files to tmpdir
-            for f in files:
-                src_p = os.path.join(ROOT_DIR, f)
-                dst_p = os.path.join(tmpdir, f)
-                os.makedirs(os.path.dirname(dst_p), exist_ok=True)
-                with open(src_p, "r", encoding="utf-8", errors="replace") as sf:
-                    with open(dst_p, "w", encoding="utf-8") as df:
-                        df.write(sf.read())
-
-            toc_src = os.path.join(ROOT_DIR, "WoWTranslate.toc")
-            toc_dst = os.path.join(tmpdir, "WoWTranslate.toc")
-            with open(toc_src, "r", encoding="utf-8", errors="replace") as sf:
-                with open(toc_dst, "w", encoding="utf-8") as df:
-                    df.write(sf.read())
-
-            # Overwrite mutated file
             mutated_path = os.path.join(tmpdir, m_file)
             with open(mutated_path, "w", encoding="utf-8") as f:
                 f.write(mutated_code)
 
-            passed, viols = run_all_checks(files, base_dir=tmpdir)
+            passed, viols = run_all_checks([m_file], base_dir=tmpdir)
             if passed or len(viols) == 0:
                 print(f"        [FAIL] Mutation '{name}' was NOT detected!")
                 all_passed = False

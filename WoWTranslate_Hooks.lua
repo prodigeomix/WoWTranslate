@@ -131,7 +131,7 @@ function WT_LFT_ApplyTranslation(entryId, isTitle, translated)
         if btn and btn:IsShown() and btn.data and btn.data.id == entryId then
             local suffix = isTitle and "Text" or "SubText"
             local widget = getglobal("LFTFrameGroupEntry" .. i .. suffix)
-            if widget then widget:SetText(WT_SanitizeDisplayText and WT_SanitizeDisplayText(translated) or translated) end
+            if widget then widget:SetText(WT_SanitizeDisplayText(translated)) end
         end
     end
 end
@@ -406,7 +406,7 @@ function WT_CreateOutgoingButton()
     end)
 
     -- Expose SetText on the frame so WT_UpdateOutgoingButton works cleanly.
-    function f:SetText(text) self.label:SetText(text) end
+    function f:SetText(btnLabel) self.label:SetText(btnLabel) end
 
     if WoWTranslateDB and WoWTranslateDB.showOutgoingButton == false then
         f:Hide()

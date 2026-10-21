@@ -106,7 +106,7 @@ def main():
 
     print(f"Runtime: {LUA50_BIN}")
     print(f"Driver:  {DRIVER_LUA}")
-    print("  >>> Executing 1,000-tick steady-state simulation in native Lua 5.0.3...")
+    print("  >>> Executing 10,000-tick steady-state simulation in native Lua 5.0.3...")
 
     passed, output, code = run_headless_simulation()
     for line in output.splitlines():
@@ -119,7 +119,7 @@ def main():
 
     print("  [OK] SuperWoW wire protocol framing verified (280b text -> 292b wire <= 300b cap < 320b buffer).")
     print("  [OK] Addon protocol isolation verified under simulated packets.")
-    print("  [OK] 1,000-tick steady-state evaluation Delta GC == 0 KiB.")
+    print("  [OK] 10,000-tick steady-state evaluation Delta GC == 0 KiB.")
 
     if "--test-mutations" in sys.argv:
         if not run_negative_controls():

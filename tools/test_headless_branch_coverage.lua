@@ -120,9 +120,10 @@ local function RunZeroGCGauntlet()
     collectgarbage()
     collectgarbage()
     local baselineMem = gcinfo()
+    local t0 = os.clock and os.clock() or 0
 
-    -- 1,000 steady-state evaluation ticks on hot paths
-    for i = 1, 1000 do
+    -- 10,000 steady-state evaluation ticks on hot paths (90,000 total function evaluations)
+    for i = 1, 10000 do
         for j = 1, table.getn(sampleChats) do
             local msg = sampleChats[j]
             local lang = WT_DetectSourceLanguage(msg)
@@ -132,23 +133,27 @@ local function RunZeroGCGauntlet()
         end
     end
 
+    local t1 = os.clock and os.clock() or 0
     local finalMem = gcinfo()
     local deltaMem = finalMem - baselineMem
+    local elapsed = t1 - t0
+    local totalOps = 10000 * table.getn(sampleChats) * 4
 
-    return baselineMem, finalMem, deltaMem
+    return baselineMem, finalMem, deltaMem, totalOps, elapsed
 end
 
 -- Execute Tests
 VerifySuperWoWBufferFraming()
 VerifyProtocolIsolation()
-local bMem, fMem, dMem = RunZeroGCGauntlet()
+local bMem, fMem, dMem, ops, elapsed = RunZeroGCGauntlet()
 
-print(string.format("GAUNTLET_RESULT: Baseline=%d KiB, Final=%d KiB, Delta=%d KiB", bMem, fMem, dMem))
+local rate = elapsed > 0 and (ops / elapsed) or 0
+print(string.format("GAUNTLET_RESULT: Baseline=%d KiB, Final=%d KiB, Delta=%d KiB | %d ops in %.3fs (%.0f ops/s)", bMem, fMem, dMem, ops, elapsed, rate))
 
 if dMem > 0 then
-    print(string.format("[FAIL] Zero-GC Gauntlet failed! Memory leaked: %d KiB across 1,000 ticks.", dMem))
+    print(string.format("[FAIL] Zero-GC Gauntlet failed! Memory leaked: %d KiB across 10,000 ticks.", dMem))
     os.exit(1)
 end
 
-print("[PASS] Headless VM Zero-GC Gauntlet (Delta = 0 KiB) & SuperWoW Wire Framing certified!")
+print("[PASS] Headless VM Zero-GC Gauntlet (10,000 ticks, Delta = 0 KiB) & SuperWoW Wire Framing certified!")
 os.exit(0)

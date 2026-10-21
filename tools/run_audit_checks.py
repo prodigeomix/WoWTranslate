@@ -3,7 +3,7 @@
 tools/run_audit_checks.py
 ========================
 Automated zero-dependency forensic audit verification suite for WoWTranslate v3.6.10.
-Executes all 15 audit suites in-process:
+Executes all 18 audit suites in-process:
   1. Lua 5.0 strict validation (validate_lua50.py).
   2. TOC order & static analysis lint (check_lua.py).
   3. Python compilation check for wow_proxy.py and tools.
@@ -16,9 +16,12 @@ Executes all 15 audit suites in-process:
   10. Lua 5.0.3 native bytecode & upvalue budget audit (<=32 upvalues) (audit_bytecode.py).
   11. AST global namespace & scope leak audit (scan_ast_globals.py).
   12. Release packaging hygiene & whitelist exclusion discipline (package_addon.py).
-  13. Pillar 1: Typestate safety & threat model audit with adversarial mutations (audit_typestate_threat.py).
-  14. Pillar 2: Bytecode AST hash-consing & upvalue budget audit with adversarial mutations (audit_bytecode_clones.py).
-  15. Pillar 3: Headless VM zero-GC gauntlet & SuperWoW wire simulation with adversarial mutations (test_headless_branch_coverage.py).
+  13. Pillar 1A: Typestate safety & threat model audit with adversarial mutations (audit_typestate_threat.py).
+  14. Pillar 1B: Formal string typestate & information flow control audit (verify_typestate_formal.py).
+  15. Pillar 2A: Bytecode AST hash-consing & upvalue budget audit with adversarial mutations (audit_bytecode_clones.py).
+  16. Pillar 2B: Generative property-based fuzzing & RFC 3629 boundary proof (fuzz_utf8_properties.py).
+  17. Pillar 3A: Low-level IPC chaos engineering & concurrency resilience harness (test_ipc_chaos.py).
+  18. Pillar 3B: Headless VM zero-GC gauntlet (10,000 ticks) & SuperWoW wire simulation (test_headless_branch_coverage.py).
 """
 
 import os
@@ -39,11 +42,14 @@ import audit_bytecode
 import audit_bytecode_clones
 import audit_typestate_threat
 import check_lua
+import fuzz_utf8_properties
 import package_addon
 import scan_ast_globals
 import test_headless_branch_coverage
+import test_ipc_chaos
 import test_wowtranslate
 import validate_lua50
+import verify_typestate_formal
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +95,7 @@ def py_safe_utf8_truncate(s: str, max_bytes: int) -> str:
 # ---------------------------------------------------------------------------
 
 def test_lua_validation():
-    print("[1/15] Running Lua 5.0 strict validator...")
+    print("[1/18] Running Lua 5.0 strict validator...")
     errs = validate_lua50.validate_all(ADDON_DIR)
     if errs:
         for fname, flist in errs.items():
@@ -101,7 +107,7 @@ def test_lua_validation():
 
 
 def test_toc_and_static_analysis():
-    print("[2/15] Running TOC order & static analysis checker...")
+    print("[2/18] Running TOC order & static analysis checker...")
     results = check_lua.check_all(ADDON_DIR)
     if results:
         for comp, err_list in results.items():
@@ -113,7 +119,7 @@ def test_toc_and_static_analysis():
 
 
 def test_python_compilation():
-    print("[3/15] Running Python proxy & tools compilation check...")
+    print("[3/18] Running Python proxy & tools compilation check...")
     proxy_path = os.path.join(ADDON_DIR, "wow_proxy.py")
     py_compile.compile(proxy_path, doraise=True)
     for tf in os.listdir(SCRIPT_DIR):
@@ -123,14 +129,14 @@ def test_python_compilation():
 
 
 def test_unit_test_suite():
-    print("[4/15] Running comprehensive unit test suite...")
+    print("[4/18] Running comprehensive unit test suite...")
     success, fail_count = test_wowtranslate.run_all_tests()
     assert success and fail_count == 0, f"Unit test suite failed with {fail_count} failure(s)!"
     print("  All unit tests passed cleanly.")
 
 
 def test_utf8_truncation_vectors():
-    print("[5/15] Running UTF-8 truncation algorithm test vectors...")
+    print("[5/18] Running UTF-8 truncation algorithm test vectors...")
 
     # Test vector 1: Pure ASCII
     ascii_str = "The quick brown fox jumps over the lazy dog"
@@ -174,7 +180,7 @@ def test_utf8_truncation_vectors():
 
 
 def test_superwow_framing():
-    print("[6/15] Running SuperWoW buffer framing and wire truncation tests...")
+    print("[6/18] Running SuperWoW buffer framing and wire truncation tests...")
 
     # 1. 280-byte chat limit test
     long_chinese = "测试" * 150  # 150 * 6 = 900 bytes
@@ -197,7 +203,7 @@ def test_superwow_framing():
 
 
 def test_static_security_sweep():
-    print("[7/15] Running static security & display sanitization sweep...")
+    print("[7/18] Running static security & display sanitization sweep...")
 
     dangerous_patterns = [
         r"\bloadstring\b",
@@ -219,7 +225,7 @@ def test_static_security_sweep():
 
 
 def test_config_validation():
-    print("[8/15] Validating config.toml structure...")
+    print("[8/18] Validating config.toml structure...")
     config_path = os.path.join(ADDON_DIR, "config.toml")
     assert os.path.exists(config_path), "config.toml not found!"
 
@@ -243,25 +249,25 @@ def test_config_validation():
 
 
 def test_version_concordance():
-    print("[9/15] Asserting 100% version concordance across TOC, Lua, Proxy, and Changelog...")
+    print("[9/18] Asserting 100% version concordance across TOC, Lua, Proxy, and Changelog...")
     tag = assert_version_concordance.main()
     assert tag, "Version concordance failed!"
 
 
 def test_bytecode_audit():
-    print("[10/15] Running Lua 5.0.3 native bytecode & upvalue budget audit (<=32 upvalues)...")
+    print("[10/18] Running Lua 5.0.3 native bytecode & upvalue budget audit (<=32 upvalues)...")
     ok = audit_bytecode.audit_all()
     assert ok, "Bytecode & upvalue audit failed!"
 
 
 def test_ast_globals():
-    print("[11/15] Running AST global namespace & scope leak audit...")
+    print("[11/18] Running AST global namespace & scope leak audit...")
     ok = scan_ast_globals.audit_all_globals()
     assert ok, "AST global namespace leak audit failed!"
 
 
 def test_packaging_hygiene():
-    print("[12/15] Auditing release packaging hygiene & whitelist exclusion discipline...")
+    print("[12/18] Auditing release packaging hygiene & whitelist exclusion discipline...")
     zip_path = package_addon.build_package()
     try:
         ok = package_addon.audit_package(zip_path)
@@ -273,20 +279,33 @@ def test_packaging_hygiene():
 
 
 def test_pillar1_typestate_threat():
-    print("[13/15] Running Pillar 1: Typestate Safety & Threat Model Audit (with adversarial mutations)...")
+    print("[13/18] Running Pillar 1A: Typestate Safety & Threat Model Audit (with adversarial mutations)...")
     files = audit_typestate_threat.get_production_files(ADDON_DIR)
     assert files, "No production files found from WoWTranslate.toc!"
     passed, violations = audit_typestate_threat.run_all_checks(files, base_dir=ADDON_DIR)
     if not passed:
         for v in violations:
             print(f"  [ERROR] {v}")
-        assert False, f"Pillar 1 detected {len(violations)} threat/typestate violation(s)!"
-    assert audit_typestate_threat.run_negative_controls(files), "Pillar 1 negative controls failed!"
-    print("  Pillar 1 certified: 0 dynamic sinks, 100% ingress sanitization, protocol isolation, 100% mutation kill rate.")
+        assert False, f"Pillar 1A detected {len(violations)} threat/typestate violation(s)!"
+    assert audit_typestate_threat.run_negative_controls(files), "Pillar 1A negative controls failed!"
+    print("  Pillar 1A certified: 0 dynamic sinks, 100% ingress sanitization, protocol isolation, 100% mutation kill rate.")
+
+
+def test_pillar1_formal_ifc():
+    print("[14/18] Running Pillar 1B: Formal String Typestate & Information Flow Control (with adversarial mutations)...")
+    files = verify_typestate_formal.get_production_files(ADDON_DIR)
+    assert files, "No production files found from WoWTranslate.toc!"
+    passed, violations = verify_typestate_formal.run_formal_typestate_audit(files, base_dir=ADDON_DIR)
+    if not passed:
+        for v in violations:
+            print(f"  [ERROR] {v}")
+        assert False, f"Pillar 1B detected {len(violations)} formal typestate violation(s)!"
+    assert verify_typestate_formal.run_negative_controls(files), "Pillar 1B negative controls failed!"
+    print("  Pillar 1B certified: abstract interpretation lattice, certified transition functions, 100% mutation kill rate.")
 
 
 def test_pillar2_bytecode_clones():
-    print("[14/15] Running Pillar 2: Bytecode AST Hash-Consing & Upvalue Audit (with adversarial mutations)...")
+    print("[15/18] Running Pillar 2A: Bytecode AST Hash-Consing & Upvalue Audit (with adversarial mutations)...")
     if not audit_bytecode_clones.is_binary_runnable(audit_bytecode_clones.LUAC_BIN):
         print("  [SKIP] luac50 disassembler not runnable in this environment.")
         return
@@ -295,13 +314,27 @@ def test_pillar2_bytecode_clones():
     if not passed:
         for v in violations:
             print(f"  [ERROR] {v}")
-        assert False, f"Pillar 2 detected {len(violations)} bytecode violation(s)!"
-    assert audit_bytecode_clones.run_negative_controls(files), "Pillar 2 negative controls failed!"
-    print("  Pillar 2 certified: Lua 5.0 upvalue budget (<=32), register pressure (<=180), 0 hot-path allocations, 100% mutation kill rate.")
+        assert False, f"Pillar 2A detected {len(violations)} bytecode violation(s)!"
+    assert audit_bytecode_clones.run_negative_controls(files), "Pillar 2A negative controls failed!"
+    print("  Pillar 2A certified: Lua 5.0 upvalue budget (<=32), register pressure (<=180), 0 hot-path allocations, 100% mutation kill rate.")
+
+
+def test_pillar2_property_fuzzing():
+    print("[16/18] Running Pillar 2B: Generative Property-Based Fuzzing & RFC 3629 Boundary Proof...")
+    ok = fuzz_utf8_properties.run_all_fuzz_checks(iterations=25_000)
+    assert ok, "Pillar 2B property-based UTF-8 fuzzing failed!"
+    print("  Pillar 2B certified: 25,000 property fuzzing iterations + native Lua 5.0 proof with 0 counterexamples.")
+
+
+def test_pillar3_ipc_chaos():
+    print("[17/18] Running Pillar 3A: Low-Level IPC Chaos Engineering & Concurrency Resilience...")
+    ok = test_ipc_chaos.run_all_chaos_tests()
+    assert ok, "Pillar 3A low-level IPC chaos engineering test failed!"
+    print("  Pillar 3A certified: malformed write resilience, concurrent lock safety, SQLite WAL mode PRAGMA integrity_check == ok.")
 
 
 def test_pillar3_headless_simulation():
-    print("[15/15] Running Pillar 3: Headless VM Zero-GC Gauntlet & SuperWoW Wire Simulation (with adversarial mutations)...")
+    print("[18/18] Running Pillar 3B: Headless VM Zero-GC Gauntlet (10,000 ticks) & SuperWoW Wire Simulation...")
     if not test_headless_branch_coverage.is_binary_runnable(test_headless_branch_coverage.LUA50_BIN):
         print("  [SKIP] lua50 interpreter not runnable in this environment.")
         return
@@ -309,9 +342,9 @@ def test_pillar3_headless_simulation():
     if not passed:
         for line in output.splitlines():
             print(f"    {line}")
-        assert False, f"Pillar 3 headless VM simulation failed with code {code}!"
-    assert test_headless_branch_coverage.run_negative_controls(), "Pillar 3 negative controls failed!"
-    print("  Pillar 3 certified: SuperWoW buffer framing, protocol isolation, 1000-tick steady-state Delta GC == 0 KiB, 100% mutation kill rate.")
+        assert False, f"Pillar 3B headless VM simulation failed with code {code}!"
+    assert test_headless_branch_coverage.run_negative_controls(), "Pillar 3B negative controls failed!"
+    print("  Pillar 3B certified: SuperWoW buffer framing, protocol isolation, 10,000-tick steady-state Delta GC == 0 KiB, 100% mutation kill rate.")
 
 
 def main():
@@ -334,11 +367,14 @@ def main():
         test_ast_globals()
         test_packaging_hygiene()
         test_pillar1_typestate_threat()
+        test_pillar1_formal_ifc()
         test_pillar2_bytecode_clones()
+        test_pillar2_property_fuzzing()
+        test_pillar3_ipc_chaos()
         test_pillar3_headless_simulation()
         t_elapsed = time.time() - t_start
         print("\n" + "=" * 65)
-        print(f"  ALL 15 AUDIT TEST SUITES PASSED in {t_elapsed:.3f}s! Codebase certified clean.")
+        print(f"  ALL 18 AUDIT TEST SUITES PASSED in {t_elapsed:.3f}s! Codebase certified clean.")
         print("=" * 65)
         return 0
     except (AssertionError, RuntimeError, ValueError, OSError) as e:

@@ -485,7 +485,7 @@ function WT_InsertTooltipNamePrepend(tooltip, text)
     if tooltip.wtLine1Text then return end
     tooltip.wtLine1Text = orig
     WT_CaptureTooltipStatusBarState(tooltip)
-    left1:SetText(text .. "|n" .. orig)
+    left1:SetText(WT_SanitizeDisplayText(text) .. "|n" .. orig)
     tooltip.wtAddedNameLine = true
     tooltip:Show()
     WT_RestoreTooltipStatusBar(tooltip)
