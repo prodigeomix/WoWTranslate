@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.6.10  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.6.11  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -54,7 +54,7 @@ if sys.platform == "win32":
     except (AttributeError, io.UnsupportedOperation, OSError):
         pass
 
-VERSION = "3.6.10"
+VERSION = "3.6.11"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------

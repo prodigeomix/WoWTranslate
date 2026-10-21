@@ -887,7 +887,7 @@ class TestVersionConcordanceAudit(unittest.TestCase):
     def test_version_concordance_matches(self):
         tag = assert_version_concordance.main()
         self.assertTrue(tag.startswith("v"), f"Proposed tag must start with 'v': {tag}")
-        self.assertEqual(tag, "v3.6.10")
+        self.assertEqual(tag, "v3.6.11")
 
 
 class TestReleasePackagingAudit(unittest.TestCase):

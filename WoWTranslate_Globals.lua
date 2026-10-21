@@ -12,7 +12,7 @@ WoWTranslateDebugLog = WoWTranslateDebugLog or {}
 -- LOCAL STATE
 -- ============================================================================
 
-WT_VERSION = "3.6.10"
+WT_VERSION = "3.6.11"
 WT_DEBUG_MODE = false
 WT_addonLoaded = false
 WT_originalAddMessage = nil
