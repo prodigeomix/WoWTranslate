@@ -1,5 +1,5 @@
 """
-wow_proxy.py  v3.6.9  --  WoWTranslate Universal Proxy & Backend Engine
+wow_proxy.py  v3.6.10  --  WoWTranslate Universal Proxy & Backend Engine
 ===================================================================
 Works with or without UnitXP DLL. Works with or without external API keys.
 
@@ -54,7 +54,7 @@ if sys.platform == "win32":
     except (AttributeError, io.UnsupportedOperation, OSError):
         pass
 
-VERSION = "3.6.9"
+VERSION = "3.6.10"
 USER_AGENT = f"WoWTranslateProxy/{VERSION}"
 
 # ---------------------------------------------------------------------------
@@ -330,6 +330,31 @@ def cache_purge_leaked_tags(db_path):
         print(f"[cache] startup tag purge: sanitized/removed {count} leaked tag entr{'y' if count==1 else 'ies'}")
     return count
 
+def cache_purge_poisoned_hallucinations(db_path):
+    """Startup cleanup: drop cached translations containing poisoned small-LLM
+    hallucinations or prompt echoes (e.g. 'Nope, failed', 'Nope, wiped',
+    'No chat message found', or echoed chat tags)."""
+    try:
+        conn = _db(db_path)
+        rows = conn.execute(
+            "SELECT src_hash, from_lang, to_lang, result FROM translations WHERE "
+            "result LIKE '%Nope, failed%' OR result LIKE '%Nope, wiped%' OR "
+            "result LIKE '%No chat message found%' OR result LIKE '%Chat message translation%'"
+        ).fetchall()
+    except sqlite3.Error as e:
+        print(f"[cache] purge hallucinations error: {e}")
+        return 0
+    if not rows:
+        return 0
+    bad = [(h, fl, tl) for h, fl, tl, _ in rows]
+    conn.executemany(
+        "DELETE FROM translations WHERE src_hash=? AND from_lang=? AND to_lang=?",
+        bad,
+    )
+    conn.commit()
+    print(f"[cache] startup hallucination purge: removed {len(bad)} poisoned entr{'y' if len(bad)==1 else 'ies'}")
+    return len(bad)
+
 
 # ---------------------------------------------------------------------------
 _ollama_online = None
@@ -420,7 +445,7 @@ def _build_llm_system_prompt(from_lang, to_lang):
         f"   - Roles: '来' -> 'LF / need', 'T' -> 'Tank', 'N' / '奶' / '奶妈' -> 'Healer', 'D' / '输出' -> 'DPS', 'TN' -> 'Tank/Healer', 'TND' -> 'Tank/Healer/DPS', '3=2' -> 'LF2M (3/5)', '4=1' -> 'LF1M (4/5)'.\n"
         f"   - Actions: '拉' -> 'summon', '开门' -> 'portal', '邮箱' -> 'mailbox', '有坑' -> 'has spot', '+' or '1' -> 'invite/inv', '重登' -> 'relog', '打信' -> 'turn in texts', '卡' -> 'stuck/lag', '灭' -> 'wipe', '开打' -> 'start/pull'.\n"
         f"   - Spawns & Resets: '刷新' / '刷' -> 'respawn / refresh / spawn', '消失' / '脱战' -> 'despawn / reset / drop aggro', '复活' -> 'resurrect / respawn'.\n"
-        f"2. Conversational Polarity: Accurately translate negative replies in context (e.g., '没有 失败了' -> 'Nope, failed' / 'No, we failed', '没有 灭了' -> 'Nope, wiped').\n"
+        f"2. Conversational Polarity & Handles: Accurately translate negative statements in context (e.g. distinguish 'did not fail' from 'failed', 'haven't wiped' from 'wiped') without substituting canned conversational replies. If the input is a single character name or short 1-4 character phrase, translate its literal meaning or transliterate naturally.\n"
         f"3. Preservation (ONLY these stay intact): player/character names, coordinates, links, numbers/progress counters (e.g., 11/30), URL placeholders (http://ph.wt/1), and standard MMO abbreviations (LFG, LFM, DPS, MT, OT, CC, SR, HR, GDKP).\n"
         f"4. Mixed Chat: If text mixes multiple languages (e.g., '卡Dead', 'not ready次', '净化r'), preserve gaming terms and translate surrounding vernacular into {tgt_lang}.\n"
         f"5. Mandatory Target Output: You MUST ALWAYS output the final translation in {tgt_lang}. NEVER output in {src_lang}. Never edit, autocorrect, or rewrite text in the source language — even if the input has typos or broken grammar, translate the meaning into {tgt_lang}. Output strictly the raw translated text. Mirror the input line-for-line. No conversational replies, no roleplay, no explanations, no quotes, and no added prefixes.\n"
@@ -1247,6 +1272,7 @@ def main():
     # artifacts or leaked tags so users get clean re-translations.
     cache_purge_code_switched(db_path)
     cache_purge_leaked_tags(db_path)
+    cache_purge_poisoned_hallucinations(db_path)
 
     backends = cfg.get("backends", [])
     workers = cfg.get("workers", 4)

@@ -12,6 +12,7 @@ end
 
 function WT_ShouldTranslatePlayerName(name)
     if not name or name == "" then return false end
+    if string.find(name, "[%^:%<%>%\t\r\n]") then return false end
     local lang = WT_DetectSourceLanguage(name)
     if not lang then return false end
     local target = (WoWTranslateDB and WoWTranslateDB.incomingToLang) or "en"
@@ -571,6 +572,10 @@ function WT_FindPlayerUnitFromTooltipText(tipText)
             local name = UnitName(unit)
             local pvp  = UnitPVPName(unit)
             local clean = string.gsub(plain, "%s*<.*>%s*", "")
+            clean = string.gsub(clean, "%s*%[[^%]]+%]%s*", "")
+            local pnl = string.find(clean, "\n", 1, true)
+            if pnl then clean = string.sub(clean, 1, pnl - 1) end
+            clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
             if name and (clean == name or clean == pvp) then
                 return unit, name, pvp
             end
@@ -604,8 +609,15 @@ function WT_ResolveTooltipPlayerName(tooltip)
         local unit, name, pvp = WT_FindPlayerUnitFromTooltipText(tipText)
         if name then tooltip.wtUnit = unit; tooltip.wtPlayerName = name; return name, pvp end
         local plain = WT_StripColorCodes(tipText)
-        if plain and plain ~= "" and WT_ShouldTranslatePlayerName(plain) then
-            tooltip.wtPlayerName = plain; return plain, nil
+        if plain and plain ~= "" then
+            plain = string.gsub(plain, "%s*<.*>%s*", "")
+            plain = string.gsub(plain, "%s*%[[^%]]+%]%s*", "")
+            local pnl = string.find(plain, "\n", 1, true)
+            if pnl then plain = string.sub(plain, 1, pnl - 1) end
+            plain = string.gsub(plain, "^%s*(.-)%s*$", "%1")
+            if plain ~= "" and WT_ShouldTranslatePlayerName(plain) then
+                tooltip.wtPlayerName = plain; return plain, nil
+            end
         end
     end
     return nil
@@ -756,6 +768,15 @@ function WT_StripOverheadDisplaySuffix(text)
     local plain = WT_StripTranslatedNameMark(text)
     local p = string.find(plain, " %(", 1, true)
     if p then plain = string.sub(plain, 1, p - 1) end
+    -- Strip bracketed PvP ranks or titles, e.g. [Sergeant], [Master Sergeant]
+    plain = string.gsub(plain, "%s*%[[^%]]+%]%s*", "")
+    -- Strip guild brackets or angle brackets, e.g. <Guild>
+    plain = string.gsub(plain, "%s*<[^>]+>%s*", "")
+    -- Strip newlines
+    local pnl = string.find(plain, "\n", 1, true)
+    if pnl then plain = string.sub(plain, 1, pnl - 1) end
+    -- Trim whitespace
+    plain = string.gsub(plain, "^%s*(.-)%s*$", "%1")
     return plain
 end
 

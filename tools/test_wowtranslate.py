@@ -887,7 +887,7 @@ class TestVersionConcordanceAudit(unittest.TestCase):
     def test_version_concordance_matches(self):
         tag = assert_version_concordance.main()
         self.assertTrue(tag.startswith("v"), f"Proposed tag must start with 'v': {tag}")
-        self.assertEqual(tag, "v3.6.9")
+        self.assertEqual(tag, "v3.6.10")
 
 
 class TestReleasePackagingAudit(unittest.TestCase):
@@ -1057,6 +1057,50 @@ class TestLLMPromptAndSanitization(unittest.TestCase):
             with patch("urllib.request.urlopen", side_effect=[mock_empty_chat_cm, mock_gen_cm]):
                 result = wow_proxy._call_ollama("Hello world", "en", "zh", backend)
                 self.assertEqual(result, "你好世界")
+
+    def test_cache_purge_poisoned_hallucinations(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+            test_db = tf.name
+        try:
+            conn = sqlite3.connect(test_db)
+            conn.execute("""
+                CREATE TABLE translations (
+                    src_hash  TEXT NOT NULL,
+                    from_lang TEXT NOT NULL,
+                    to_lang   TEXT NOT NULL,
+                    result    TEXT NOT NULL,
+                    created   INTEGER NOT NULL,
+                    PRIMARY KEY (src_hash, from_lang, to_lang)
+                )
+            """)
+            conn.execute("INSERT INTO translations VALUES ('h1', 'zh', 'en', 'Nope, failed', 12345)")
+            conn.execute("INSERT INTO translations VALUES ('h2', 'zh', 'en', 'Nope, wiped.', 12346)")
+            conn.execute("INSERT INTO translations VALUES ('h3', 'zh', 'en', 'No chat message found', 12347)")
+            conn.execute("INSERT INTO translations VALUES ('h4', 'zh', 'en', 'Clean translation', 12348)")
+            conn.commit()
+            conn.close()
+
+            purged = wow_proxy.cache_purge_poisoned_hallucinations(test_db)
+            self.assertEqual(purged, 3)
+
+            conn = sqlite3.connect(test_db)
+            remaining = conn.execute("SELECT result FROM translations").fetchall()
+            conn.close()
+            self.assertEqual(remaining, [("Clean translation",)])
+        finally:
+            if os.path.exists(test_db):
+                try:
+                    os.remove(test_db)
+                except OSError:
+                    pass
+
+    def test_system_prompt_polarity_and_handles(self):
+        prompt, src, tgt = wow_proxy._build_llm_system_prompt("zh", "en")
+        self.assertNotIn("'Nope, failed'", prompt)
+        self.assertNotIn("'Nope, wiped'", prompt)
+        self.assertIn("Conversational Polarity", prompt)
+        self.assertIn("single character name", prompt)
 
 
 def run_all_tests():

@@ -2,7 +2,7 @@
 """
 tools/run_audit_checks.py
 ========================
-Automated zero-dependency forensic audit verification suite for WoWTranslate v3.6.9.
+Automated zero-dependency forensic audit verification suite for WoWTranslate v3.6.10.
 Executes all 12 audit suites in-process:
   1. Lua 5.0 strict validation (validate_lua50.py).
   2. TOC order & static analysis lint (check_lua.py).
@@ -269,7 +269,7 @@ def test_packaging_hygiene():
 def main():
     t_start = time.time()
     print("=" * 65)
-    print("  WoWTranslate v3.6.9 Forensic Audit & Verification Suite")
+    print("  WoWTranslate v3.6.10 Forensic Audit & Verification Suite")
     print("=" * 65)
 
     try:

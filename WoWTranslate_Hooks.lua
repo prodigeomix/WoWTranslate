@@ -82,6 +82,36 @@ function WT_GetChannelTag(event, channelStr)
     return "WT"
 end
 
+-- Detects automated addon inter-communication packets across chat channels
+-- (e.g. Raffle v4 'REQ^timestamp^Raffle^v4', PizzaWorldBuffs 'PWB:1:...', Atlas, etc.)
+function WT_IsAddonProtocolMessage(msg)
+    if not msg or msg == "" then return false end
+    -- Caret-delimited protocol sync (e.g. REQ^1792567010^Raffle^v4, ACK^..., SYNC^...)
+    if string.find(msg, "^[A-Za-z0-9_]+%^") then
+        return true
+    end
+    -- Colon-delimited versioned sync (e.g. ADDON:1:..., Atlas: Version:..., Meeting:C:...)
+    if string.find(msg, "^[A-Za-z][A-Za-z0-9_]*:%d+:") or
+       string.find(msg, "^Meeting:[CR]:") or
+       string.find(msg, "^Atlas: Version:") or
+       string.find(msg, "^Bath:V:") or
+       string.find(msg, "^Session: V: ") then
+        return true
+    end
+    -- Tab-delimited or tilde-delimited protocol sync
+    if string.find(msg, "^[A-Za-z0-9_]+%t") or string.find(msg, "^[A-Za-z0-9_]+%~") then
+        return true
+    end
+    -- Comma-delimited or bracketed known addon packet signatures
+    if string.find(msg, "^BGTBL,") or
+       string.find(msg, "^<[A-Za-z0-9_]+:[^>]+>") or
+       string.find(msg, "%[Translated by chat translator addon%]") or
+       string.find(msg, "WoWTranslate", 1, true) then
+        return true
+    end
+    return false
+end
+
 
 -- ============================================================================
 -- GROUP FINDER (LFT) TRANSLATION
@@ -571,13 +601,7 @@ function WT_HookChatFrames(force)
                                 WT_ChatFrame_FlushOriginal(capturedThis)
                                 return
                             end
-                            if string.find(capturedArg1, "^Meeting:[CR]:") or 
-                               string.find(capturedArg1, "^BGTBL,") or
-                               string.find(capturedArg1, "^Atlas: Version:") or
-                               string.find(capturedArg1, "^Bath:V:") or
-                               string.find(capturedArg1, "%[Translated by chat translator addon%]") or
-                               string.find(capturedArg1, "WoWTranslate", 1, true) or
-                               string.find(capturedArg1, "^Session: V: ") then
+                            if WT_IsAddonProtocolMessage(capturedArg1) then
                                 WT_ChatFrame_FlushOriginal(capturedThis)
                                 return
                             end
@@ -962,9 +986,8 @@ function WT_HookedSendChatMessage(msg, chatType, language, channel)
         return WT_SafeSendChatMessage(msg, chatType, language, channel)
     end
 
-    -- Skip addon inter-communication messages (PizzaWorldBuffs, Atlas-CFM, etc.)
-    -- These follow the format: ADDONNAME:VERSION:DATA
-    if string.find(msg, "^[A-Za-z][A-Za-z0-9_]*:%d+:") then
+    -- Skip addon inter-communication messages (Raffle caret-delimited, PizzaWorldBuffs, etc.)
+    if WT_IsAddonProtocolMessage(msg) then
         return WT_SafeSendChatMessage(msg, chatType, language, channel)
     end
 

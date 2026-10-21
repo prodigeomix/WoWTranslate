@@ -2,6 +2,23 @@
 
 All notable changes, fixes, and improvements to **WoWTranslate** are documented in this file.
 
+## [v3.6.10] - 2026-10-21
+
+### 🛡️ SLM Polarity Anchoring & Hallucination Elimination
+- **Prompt De-anchoring (`_build_llm_system_prompt`)**: Replaced rigid negative catchphrase examples (`'没有 失败了' -> 'Nope, failed'`) with generalized polarity guidance and explicit instructions for handles and short 1–4 character phrases. Prevents small 3B models (e.g. `qwen2.5:3b`) from anchoring on prompt examples and turning player nicknames or negation words into `"Nope, failed"`.
+- **Automated Hallucination Purge (`cache_purge_poisoned_hallucinations`)**: Added startup SQLite purification in `wow_proxy.py` that automatically identifies and deletes poisoned prompt echoes, `"Nope, failed"`, and `"No chat message found"` entries from `translations.db`.
+
+### 📡 Addon Inter-Communication Protocol Filtering
+- **Unified Protocol Guard (`WT_IsAddonProtocolMessage`)**: Created a comprehensive filter in `WoWTranslate_Hooks.lua` detecting automated addon communication packets across chat channels:
+  - Caret-delimited protocol sync (e.g. Raffle v4 `REQ^<timestamp>^Raffle^v4`, `ACK^...`, `SYNC^...`).
+  - Colon-delimited versioned sync (e.g. `PizzaWorldBuffs:1:...`, `Atlas: Version:`, `Meeting:C:`).
+  - Tab/tilde-delimited sync protocols.
+- **Outgoing & Incoming Protection**: Prevents Outgoing Translation (`OUT:ON`) from intercepting and corrupting addon protocols like Raffle into Chinese, and suppresses incoming protocol messages from triggering translation requests.
+
+### 🏷️ Player Name & Title Sanitization
+- **PvP Rank Bracket Stripping**: Enhanced `WT_FindPlayerUnitFromTooltipText`, `WT_ResolveTooltipPlayerName`, and `WT_StripOverheadDisplaySuffix` in `WoWTranslate_Tooltip.lua` to strip bracketed PvP titles (e.g. `[Sergeant]`, `[Master Sergeant]`) and newlines before sending names to the translator, preventing titles from leaking into player name translation requests.
+- **Protocol Character Rejection**: Hardened `WT_ShouldTranslatePlayerName` to immediately reject strings containing protocol delimiters (`^`, `:`, `<`, `>`, tabs, newlines).
+
 ## [v3.6.9] - 2026-10-17
 
 ### 🛡️ LLM Prompt Framing & Delimiter Injection Hardening
