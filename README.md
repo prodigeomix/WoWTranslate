@@ -206,22 +206,26 @@ timeout = 8
 
 ---
 
-## 🧪 Developer Verification & Quality Assurance
+## 🧪 Developer Verification & Quality Assurance (4-Pillar Pipeline)
 
-Maintainers and developers can verify repository compliance using our automated audit toolchain:
+WoWTranslate adheres to the formal **4-Pillar Verification Pipeline** for Lua 5.0 and WoW 1.12.1 / Turtle WoW client addons:
 
 ```bash
-# Run Lua 5.0 strict syntax and opcode validator
-python tools/validate_lua50.py
-
-# Run static analysis and TOC order linter
-python tools/check_lua.py
-
-# Run core unit tests
-python tools/test_wowtranslate.py
-
-# Run full forensic audit suite
+# Run full 15-suite unified verification gate (completes in < 5 seconds)
 python tools/run_audit_checks.py
+
+# Pillar 1: Typestate safety & threat model audit (with adversarial mutations)
+python tools/audit_typestate_threat.py --test-mutations
+
+# Pillar 2: Bytecode AST hash-consing & upvalue budget audit (with adversarial mutations)
+python tools/audit_bytecode_clones.py --test-mutations
+
+# Pillar 3: Headless VM zero-GC gauntlet & SuperWoW wire simulation (with adversarial mutations)
+python tools/test_headless_branch_coverage.py --test-mutations
+
+# Core unit test suite & Lua 5.0 strict validator
+python tools/test_wowtranslate.py
+python tools/validate_lua50.py
 ```
 
 ---

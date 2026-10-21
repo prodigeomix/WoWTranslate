@@ -46,12 +46,19 @@ Before committing or completing any task, execute:
 ```bash
 python tools/run_audit_checks.py
 ```
-All 8 verification suites must pass with zero errors:
-1. Lua 5.0 strict validator
-2. TOC load order & static analysis
-3. Python proxy & tools compilation
-4. Comprehensive unit test suite
+All 15 verification suites must pass with zero errors in under 6 seconds:
+1. Lua 5.0 strict validator (`validate_lua50.py`)
+2. TOC load order & static analysis (`check_lua.py`)
+3. Python proxy & tools compilation (`py_compile`)
+4. Comprehensive unit test suite (`test_wowtranslate.py`)
 5. UTF-8 truncation algorithm test vectors
 6. SuperWoW buffer framing & wire truncation
 7. Static security & display sanitization sweep
 8. config.toml structure validation
+9. Version concordance assertion across TOC, Lua, Proxy, and Changelog (`assert_version_concordance.py`)
+10. Lua 5.0.3 native bytecode & upvalue budget audit (`audit_bytecode.py`)
+11. AST global namespace & scope leak audit (`scan_ast_globals.py`)
+12. Release packaging hygiene & whitelist exclusion discipline (`package_addon.py`)
+13. **Pillar 1: Typestate Safety & Threat Model Audit** (`audit_typestate_threat.py`) with adversarial mutations proving 100% kill rate.
+14. **Pillar 2: Bytecode AST Hash-Consing & Upvalue Budget Audit** (`audit_bytecode_clones.py`) with adversarial mutations proving 100% kill rate.
+15. **Pillar 3: Headless VM Zero-GC Gauntlet & SuperWoW Wire Simulation** (`test_headless_branch_coverage.py`) with 1,000-tick steady-state Delta GC == 0 KiB and adversarial mutations.

@@ -65,14 +65,23 @@ def audit_file(rel_path):
 
     return errors
 
+def is_binary_runnable(binary_path: str) -> bool:
+    if not os.path.exists(binary_path):
+        return False
+    try:
+        res = subprocess.run([binary_path, "-v"], capture_output=True, timeout=2)
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
+
 def audit_all():
     files = get_production_files()
     print("================================================================================")
     print("LUA 5.0.3 NATIVE BYTECODE & UPVALUE BUDGET AUDITOR")
     print("================================================================================")
-    if not os.path.exists(LUAC_BIN):
-        print(f"Disassembler: {LUAC_BIN} (not present in this environment)")
-        print("[SKIP] Local luac50.exe binary not found; skipping native bytecode audit.")
+    if not is_binary_runnable(LUAC_BIN):
+        print(f"Disassembler: {LUAC_BIN} (not runnable in this environment)")
+        print("[SKIP] Local luac50.exe binary not runnable; skipping native bytecode audit.")
         return True
 
     print(f"Disassembler: {LUAC_BIN}")

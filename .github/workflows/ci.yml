@@ -41,7 +41,10 @@ jobs:
       - name: Run Core Unit Test Suite
         run: python tools/test_wowtranslate.py
 
-      - name: Run Full Forensic Audit Verification Suite
+      - name: Run Pillar 1 Typestate & Threat Model Audit
+        run: python tools/audit_typestate_threat.py --test-mutations
+
+      - name: Run Full 15-Suite Forensic Audit Verification Gate
         run: python tools/run_audit_checks.py
 
       - name: Display Installation Instructions & Prerequisites in Job Summary

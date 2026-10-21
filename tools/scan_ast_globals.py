@@ -98,8 +98,15 @@ def get_production_files():
                 files.append(line.replace("\\", "/"))
     return files
 
+_AST_CACHE = {}
+
 def check_file_ast(filepath):
     full_path = os.path.join(ROOT_DIR, filepath)
+    mtime = os.path.getmtime(full_path) if os.path.exists(full_path) else 0
+    cache_key = (filepath, mtime)
+    if cache_key in _AST_CACHE:
+        return list(_AST_CACHE[cache_key])
+
     with open(full_path, "r", encoding="utf-8") as f:
         src = f.read()
 
@@ -184,6 +191,7 @@ def check_file_ast(filepath):
 
     root_scope = Scope()
     visit(tree, root_scope)
+    _AST_CACHE[cache_key] = leaks
     return leaks
 
 def audit_all_globals():

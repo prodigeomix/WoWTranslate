@@ -268,15 +268,17 @@ function WT_PreprocessOutgoing(text)
     return text
 end
 
+local DEFAULT_ENABLED_SOURCE_LANGS = { zh=true, ja=true, ko=true, ru=true, es=false, en=false }
+
 -- Auto-detect which source language a message is in.
 -- Returns "zh", "ja", "ko", "ru", "es", "en", or nil if no supported language found.
 function WT_DetectSourceLanguage(text)
     if not text then return nil end
     local enabled = (WoWTranslateDB and WoWTranslateDB.enabledSourceLangs)
-                    or { zh=true, ja=true, ko=true, ru=true, es=false, en=false }
+                    or DEFAULT_ENABLED_SOURCE_LANGS
     -- If table exists but every lang is nil/false, fall back to all-enabled (except en, es)
     if not enabled.zh and not enabled.ja and not enabled.ko and not enabled.ru and not enabled.es and not enabled.en then
-        enabled = { zh=true, ja=true, ko=true, ru=true, es=false, en=false }
+        enabled = DEFAULT_ENABLED_SOURCE_LANGS
     end
 
     local hasKorean   = false
